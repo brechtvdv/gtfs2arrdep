@@ -24,13 +24,13 @@ if (($handleRead = fopen($file_agency, 'r')) !== false) {
     }
 
     fclose($handleRead);
+
+    $entityManager->flush();
+
+    echo "Created Agency " . $agency->getAgencyName() . " with ID " . $agency->getAgencyId() . "\n";
 } else {
     echo "Something went wrong with reading agency.txt" . "\n";
 }
-
-$entityManager->flush();
-
-echo "Created Agency " . $agency->getAgencyName() . " with ID " . $agency->getAgencyId() . "\n";
 
 function save($agency, $property, $value) {
     switch ($property) {
