@@ -7,13 +7,13 @@ Explanation of the data model of arrival and departure objects can be found [her
 
 ## Requirements
 
-    * [composer](https://getcomposer.org/download/)
+    * Composer
     * MySQL
     * PHP 5.4+
 
 ## Install
 
-We use the PHP package manager [composer](http://getcomposer.org). Make sure it's installed and then run from this directory:
+We use the PHP package manager [Composer](http://getcomposer.org). Make sure it's installed and then run from this directory:
 
 ```bash
 composer install
