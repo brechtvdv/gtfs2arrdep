@@ -1,0 +1,34 @@
+Stoptime:
+  type: entity
+  table: stoptimes
+  id:
+    id:
+      type: integer
+      generator:
+        strategy: AUTO
+  fields:
+    tripId:
+        type: string
+    arrivalTime:
+      type: time
+    departureTime:
+      type: time
+    stopId:
+      type: string
+    stopSequence:
+      type: integer
+    stopHeadsign:
+      type: string
+      nullable: TRUE
+    pickupType:
+      type: integer
+      nullable: TRUE
+    dropOffType:
+      type: integer
+      nullable: TRUE
+    shapeDistTraveled:
+      type: string
+      nullable: TRUE
+    timepoint:
+      type: integer
+      nullable: TRUE
