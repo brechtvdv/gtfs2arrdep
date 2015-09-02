@@ -19,3 +19,6 @@ unzip $GTFS_PATH -d /tmp/gtfs2arrdep
 # Load data into tables
 ## agency.txt
 php scripts/load_agency.php /tmp/gtfs2arrdep/agency.txt
+
+## stops.txt
+php scripts/load_stops.php /tmp/gtfs2arrdep/stops.txt
