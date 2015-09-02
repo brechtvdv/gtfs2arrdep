@@ -44,6 +44,3 @@ php scripts/load_calendar_dates.php /tmp/gtfs2arrdep/calendar_dates.txt
 
 ## frequencies.txt
 php scripts/load_frequencies.php /tmp/gtfs2arrdep/frequencies.txt
-
-# Query for arrivals and departures
-php scripts/create_arrivals_and_departures.php

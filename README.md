@@ -21,16 +21,22 @@ composer install
 
 ## Generating arrivals/departures
 
-### Step 1: database configuration
+### Step 1: Setup database configuration
 
 Fill in your MySQL credentials inside ```db-config.php```.
 
-### Step 2: Run script
+### Step 2: Run database load script
 
 ```bash
-scripts/init.sh path-to-gtfs.zip
+scripts/load-db.sh
 ```
 
-### Step 3: Done
+### Step 3: Run arrivals/departures generator script
+
+```
+php scripts/create_arrivals_and_departures.php
+```
+
+### Step 4: Done
 
 You can find arrivals-[agency_id].json and departures-[agency_id].json in ```dist``` folder.
