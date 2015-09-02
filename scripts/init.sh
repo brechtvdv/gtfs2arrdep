@@ -25,3 +25,6 @@ php scripts/load_stops.php /tmp/gtfs2arrdep/stops.txt
 
 ## routes.txt
 php scripts/load_routes.php /tmp/gtfs2arrdep/routes.txt
+
+## trips.txt
+php scripts/load_trips.php /tmp/gtfs2arrdep/trips.txt
