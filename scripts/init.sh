@@ -22,3 +22,6 @@ php scripts/load_agency.php /tmp/gtfs2arrdep/agency.txt
 
 ## stops.txt
 php scripts/load_stops.php /tmp/gtfs2arrdep/stops.txt
+
+## routes.txt
+php scripts/load_routes.php /tmp/gtfs2arrdep/routes.txt
