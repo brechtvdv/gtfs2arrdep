@@ -3,12 +3,16 @@
 # Read database configuration
 USERNAME=`cat db-config.php | grep username | cut -d \' -f 4`
 PASSWORD=`cat db-config.php | grep password | cut -d \' -f 4`
+DATABASE=`cat db-config.php | grep database | cut -d \' -f 4`
 
 # Create database
 mysql --local-infile --user=$USERNAME --password=$PASSWORD < scripts/create_database.sql
 
 # Create datatables
 vendor/bin/doctrine orm:schema-tool:update --force --dump-sql
+
+# Update foreign keys
+mysql --local-infile --user=$USERNAME --password=$PASSWORD --database=$DATABASE < scripts/update_foreign_keys.sql
 
 # Unzip GTFS files to temporary directory
 GTFS_PATH=$1

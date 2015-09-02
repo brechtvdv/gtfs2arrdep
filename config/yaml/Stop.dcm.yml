@@ -1,6 +1,11 @@
 Stop:
   type: entity
   table: stops
+  indexes:
+    STOPS_STOP_CODE_IND:
+      columns: [ stopCode ]
+    STOPS_STOP_NAME_IND:
+      columns: [ stopName ]
   id:
     stopId:
       type: string

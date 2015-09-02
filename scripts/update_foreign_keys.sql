@@ -1,0 +1,35 @@
+-- DISABLE FK CHECKS
+SET foreign_key_checks = 0;
+
+-- Foreign Keys
+
+ALTER TABLE `trips`
+  ADD CONSTRAINT FK_TRIPS_ROUTES
+  FOREIGN KEY ( `routeId` )
+  REFERENCES `routes` ( `routeId` )
+  ON DELETE NO ACTION
+  ON UPDATE NO ACTION;
+
+ALTER TABLE `trips`
+  ADD CONSTRAINT `FK_TRIPS_CALENDAR`
+  FOREIGN KEY (`service_id` )
+  REFERENCES `calendarDates` ( `service_id` )
+  ON DELETE NO ACTION
+  ON UPDATE NO ACTION;
+
+ALTER TABLE `stoptimes`
+  ADD CONSTRAINT `FK_STOP_TIMES_TRIPS`
+  FOREIGN KEY (`tripId` )
+  REFERENCES `trips` (`trip_id` )
+  ON DELETE NO ACTION
+  ON UPDATE NO ACTION;
+
+ALTER TABLE `stoptimes`
+  ADD CONSTRAINT `FK_STOP_TIMES_STOPS`
+  FOREIGN KEY (`stopId` )
+  REFERENCES `stops` (`stopId` )
+  ON DELETE NO ACTION
+  ON UPDATE NO ACTION;
+
+  -- ENABLE FK CHECKS
+SET foreign_key_checks = 1;
