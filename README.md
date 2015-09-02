@@ -28,7 +28,7 @@ Fill in your MySQL credentials inside ```db-config.php```.
 ### Step 2: Run database load script
 
 ```bash
-scripts/load-db.sh path-to-gtfs.zip
+scripts/init.sh path-to-gtfs.zip
 ```
 
 ### Step 3: Run arrivals/departures generator script
