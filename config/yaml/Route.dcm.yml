@@ -6,7 +6,7 @@ Route:
       type: string
   fields:
     agencyId:
-      type: integer
+      type: string
       nullable: TRUE
     routeShortName:
       type: string

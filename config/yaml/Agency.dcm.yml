@@ -3,7 +3,7 @@ Agency:
   table: agency
   id:
     agencyId:
-      type: integer
+      type: string
       nullable: TRUE
   fields:
     agencyName:

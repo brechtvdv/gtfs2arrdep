@@ -10,7 +10,7 @@ class Route
      */
     protected $routeId;
     /**
-     * @var int
+     * @var string
      */
     protected $agencyId = null;
     /**
@@ -59,7 +59,7 @@ class Route
     }
 
     /**
-     * @return int
+     * @return string
      */
     public function getAgencyId()
     {
@@ -67,7 +67,7 @@ class Route
     }
 
     /**
-     * @param int $agencyId
+     * @param string $agencyId
      */
     public function setAgencyId($agencyId)
     {
