@@ -34,3 +34,6 @@ php scripts/load_stop_times.php /tmp/gtfs2arrdep/stop_times.txt
 
 ## calendar.txt
 php scripts/load_calendar.php /tmp/gtfs2arrdep/calendar.txt
+
+## calendar_dates.txt
+php scripts/load_calendar_dates.php /tmp/gtfs2arrdep/calendar_dates.txt
