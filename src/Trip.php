@@ -26,7 +26,7 @@ class Trip
      */
     protected $tripShortName = null;
     /**
-     * @var int
+     * @var string
      */
     protected $directionId = null;
     /**
@@ -127,7 +127,7 @@ class Trip
     }
 
     /**
-     * @return int
+     * @return string
      */
     public function getDirectionId()
     {
@@ -135,7 +135,7 @@ class Trip
     }
 
     /**
-     * @param int $directionId
+     * @param string $directionId
      */
     public function setDirectionId($directionId)
     {

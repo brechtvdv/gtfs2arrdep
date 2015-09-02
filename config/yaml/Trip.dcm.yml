@@ -16,7 +16,7 @@ Trip:
       type: string
       nullable: TRUE
     directionId:
-      type: integer
+      type: string
       nullable: TRUE
     blockId:
       type: string
