@@ -12,15 +12,15 @@ ALTER TABLE `trips`
 
 ALTER TABLE `trips`
   ADD CONSTRAINT `FK_TRIPS_CALENDAR`
-  FOREIGN KEY (`service_id` )
-  REFERENCES `calendarDates` ( `service_id` )
+  FOREIGN KEY (`serviceId` )
+  REFERENCES `calendars` ( `serviceId` )
   ON DELETE NO ACTION
   ON UPDATE NO ACTION;
 
 ALTER TABLE `stoptimes`
   ADD CONSTRAINT `FK_STOP_TIMES_TRIPS`
   FOREIGN KEY (`tripId` )
-  REFERENCES `trips` (`trip_id` )
+  REFERENCES `trips` (`tripId` )
   ON DELETE NO ACTION
   ON UPDATE NO ACTION;
 
