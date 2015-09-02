@@ -34,7 +34,7 @@ class Stoptime
      */
     protected $stopHeadsign = null;
     /**
-     * @var int
+     * @var string
      */
     protected $pickupType = null;
     /**
@@ -154,7 +154,7 @@ class Stoptime
     }
 
     /**
-     * @return int
+     * @return string
      */
     public function getPickupType()
     {
@@ -162,7 +162,7 @@ class Stoptime
     }
 
     /**
-     * @param int $pickupType
+     * @param string $pickupType
      */
     public function setPickupType($pickupType)
     {

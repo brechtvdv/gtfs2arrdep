@@ -21,7 +21,7 @@ Stoptime:
       type: string
       nullable: TRUE
     pickupType:
-      type: integer
+      type: string
       nullable: TRUE
     dropOffType:
       type: integer

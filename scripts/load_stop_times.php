@@ -19,7 +19,11 @@ if (($handleRead = fopen($file_stop_times, 'r')) !== false) {
         $stoptime = new Stoptime();
 
         for ($i = 0; $i < $column_count; $i++) {
-            save($stoptime, $header[$i], $line[$i]);
+            if (!array_key_exists($i, $line)) {
+                save($stoptime,$header[$i], '');
+            } else {
+                save($stoptime, $header[$i], $line[$i]);
+            }
         }
 
         unset($line);
