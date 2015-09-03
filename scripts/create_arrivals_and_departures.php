@@ -6,7 +6,7 @@ use Ivory\JsonBuilder\JsonBuilder;
 
 date_default_timezone_set('UTC');
 
-$date_serviceId_pairs = [];
+$date_serviceIds = [];
 
 // Let's generate list of dates with corresponding serviceId of days that drive
 // From calendars
@@ -35,7 +35,7 @@ for ($i = 0; $i < count($calendars); $i++) {
             // add to pairs
             $arrdepdate = date('Y-m-d', $date);
             $service = $calendar['serviceId'];
-            $date_serviceId_pairs[] = [$arrdepdate, $service];
+            addDateServiceId($date_serviceIds, $arrdepdate, $service);
         }
     }
 }
@@ -59,74 +59,135 @@ function getDayFromNum($dayOfWeekNum) {
     }
 }
 
-// Now parse calendar_dates
-// When exceptionType equals 1 -> add to date_serviceId_pairs
-// When exceptionType equals 2 -> remove
-
+// get agencyId for output filenames
 $sql = "
         SELECT *
-          FROM calendarDates
+          FROM agency
     ";
 
 $stmt = $entityManager->getConnection()->prepare($sql);
 $stmt->execute();
-$calendarDates = $stmt->fetchAll();
+$agencyArray = $stmt->fetchAll();
+$arrivalsFilename = 'dist/arrivals-' . $agencyArray[0]['agencyId'] . '.json';
+$departuresFilename = 'dist/departures-' . $agencyArray[0]['agencyId'] . '.json';
 
-for ($i = 0; $i < count($calendarDates); $i++) {
-    $calendarDate = $calendarDates[$i];
+// Now parse calendar_dates
+if (count($calendars) > 0) {
+    $sql = "
+        SELECT *
+          FROM calendarDates
+    ";
+    $stmt = $entityManager->getConnection()->prepare($sql);
+    $stmt->execute();
+    $calendarDates = $stmt->fetchAll();
 
-    if ($calendarDate['exceptionType'] == "1") {
-        $date_serviceId_pairs[] = [$calendarDate['date'], $calendarDate['serviceId']];
-    } else {
-        $date_serviceId_pairs = removeDateServiceIdPairFromPairs([$calendarDate['date'], $calendarDate['serviceId']], $date_serviceId_pairs);
+    // Hopefully no memory problems
+    addCalendarDates($date_serviceIds, $calendarDates);
+
+    // We have now merged calendars and calendar_dates
+    // Time for generating departures and arrivals
+    generateArrivalsDepartures($date_serviceIds, $entityManager);
+} else {
+    // There can be a lot calendar_dates in this case
+    // That's why we'll get start_date and end_date from feed_info
+    // Then we'll fetch all serviceIds for every day
+    $sql = "
+            SELECT *
+              FROM feedInfo
+        ";
+    $stmt = $entityManager->getConnection()->prepare($sql);
+    $stmt->execute();
+    $feedInfo = $stmt->fetchAll();
+
+    $startDate = $feedInfo['startDate'];
+    $endDate = $feedInfo['endDate'];
+
+    // loop all days between start_date and end_date
+    for ($date = strtotime($startDate); $date < strtotime($endDate); $date = strtotime('+1 day', $date)) {
+        $sql = "
+            SELECT *
+              FROM calendarDates
+              WHERE date = ?
+        ";
+        $stmt = $entityManager->getConnection()->prepare($sql);
+        $stmt->bindParam(1, date('Y-m-d', $date));
+        $stmt->execute();
+        $calendarDates = $stmt->fetchAll();
+
+        $date_serviceIdsArray = addCalendarDates($date_serviceIds, $calendarDates);
+
+        generateArrivalsDepartures($date_serviceIdsArray, $entityManager);
+
+        $date_serviceIds = [];
     }
 }
 
-function removeDateServiceIdPairFromPairs($dateServiceIdPair, $pairs) {
-    $pairsWithoutException = [];
+function addDateServiceId($data_serviceIdsArray, $date, $serviceId) {
+    $data_serviceIdsArray[$date][] = $serviceId;
+    return $data_serviceIdsArray;
+}
 
-    for ($j = 0; $j < count($pairs); $j++) {
-        if ($dateServiceIdPair != $pairs[$j]) {
-            $pairsWithoutException[] = $pairs[$j];
+function removeDateServiceId($data_serviceIdsArray, $date, $serviceId) {
+    $date_serviceIdsWithoutException = [];
+
+    for ($j = 0; $j < count($data_serviceIdsArray); $j++) {
+        if ($data_serviceIdsArray[$j][0] == $date) {
+            for ($k = 0; $k < count($data_serviceIdsArray[$j][0]); $k++) {
+                if ($data_serviceIdsArray[$j][0][$k] != $serviceId) {
+                    $date_serviceIdsWithoutException[$j][0][] = $data_serviceIdsArray[$j][0][$k];
+                } else {
+                    // ignore exception
+                }
+            }
         } else {
-            // exception gets deleted
+            $date_serviceIdsWithoutException[] = $data_serviceIdsArray[$j][0];
         }
     }
 
-    return $pairsWithoutException;
+    return $date_serviceIdsWithoutException;
 }
 
-// Now our pairs are a merge of calendars and calendar_dates
-// Time for generating departures and arrivals
+function addCalendarDates($data_serviceIdsArray, $calendarDates) {
+    for ($i = 0; $i < count($calendarDates); $i++) {
+        $calendarDate = $calendarDates[$i];
 
-generateArrivalsDepartures($date_serviceId_pairs, $entityManager);
+        // When exceptionType equals 1 -> add to date_serviceId_pairs
+        // When exceptionType equals 2 -> remove
+        if ($calendarDate['exceptionType'] == "1") {
+            $data_serviceIds = addDateServiceId($data_serviceIdsArray, $calendarDate['date'], $calendarDate['serviceId']);
+        } else {
+            $data_serviceIds = removeDateServiceId($data_serviceIdsArray, $calendarDate['date'], $calendarDate['serviceId']);
+        }
+    }
+    return $data_serviceIds;
+}
 
 /**
- * @param $date_serviceId_pairs
+ * @param $date_serviceIdsArray
  * @param $entityManager
  */
-function generateArrivalsDepartures($date_serviceId_pairs, $entityManager)
+function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
 {
-    $builderArrivals = new JsonBuilder();
-    $builderArrivals->setValues(array());
-    $builderDepartures = new JsonBuilder();
-    $builderDepartures->setValues(array());
-    $kArrivals = 0; // path to append data
-    $kDepartures = 0;
+    global $arrivalsFilename, $departuresFilename;
 
     // Loop through all dates
-    for ($i = 0; $i < count($date_serviceId_pairs); $i++) {
-        $date = $date_serviceId_pairs[$i][0];
-        $serviceId = $date_serviceId_pairs[$i][1];
+    for ($i = 0; $i < count($date_serviceIdsArray); $i++) {
+        $date = array_keys($date_serviceIdsArray)[0];
+        $serviceIds = array_shift($date_serviceIdsArray);
+
+        $serviceMatches = [];
+        for ($j = 0; $j < count($serviceIds); $j++) {
+            $serviceMatches[] = "'" . $serviceIds[$j] . "'";
+        }
+        $serviceMatches = join(' , ', $serviceMatches);
 
         $sql = "
             SELECT *
               FROM trips
-              WHERE serviceId = ?
+              WHERE serviceId IN ( $serviceMatches )
         ";
 
         $stmt = $entityManager->getConnection()->prepare($sql);
-        $stmt->bindValue(1, $serviceId);
         $stmt->execute();
         $trips = $stmt->fetchAll();
 
@@ -154,8 +215,7 @@ function generateArrivalsDepartures($date_serviceId_pairs, $entityManager)
                 'gtfs:route'        => findRouteId($arrivalData['tripId'], $tripRouteIdPair)
             ];
 
-            $builderArrivals->setValue("[$kArrivals]", $arrival);
-            $kArrivals++;
+            writeToFile($arrivalsFilename, $arrival);
         }
 
         // DEPARTURES
@@ -173,30 +233,9 @@ function generateArrivalsDepartures($date_serviceId_pairs, $entityManager)
                 'gtfs:route'        => findRouteId($departureData['tripId'], $tripRouteIdPair)
             ];
 
-            $builderDepartures->setValue("[$kDepartures]", $departure);
-            $kDepartures++;
+            writeToFile($departuresFilename, $departure);
         }
     }
-
-    // get agencyId for output filenames
-    $sql = "
-        SELECT *
-          FROM agency
-    ";
-
-    $stmt = $entityManager->getConnection()->prepare($sql);
-    $stmt->execute();
-    $agencyArray = $stmt->fetchAll();
-
-    // build Arrivals JSON
-    $json = $builderArrivals->build();
-    $filename = 'dist/arrivals-' . $agencyArray[0]['agencyId'] . '.json';
-    writeToFile($filename, $json);
-
-    // build Departures JSON
-    $json = $builderDepartures->build();
-    $filename = 'dist/departures-' . $agencyArray[0]['agencyId'] . '.json';
-    writeToFile($filename, $json);
 }
 
 function queryArrivals($entityManager, $trips) {
@@ -241,8 +280,13 @@ function findRouteId($tripId, $tripRouteIdPair) {
     }
 }
 
-function writeToFile($filename, $json) {
-    $fp = fopen($filename, 'w');
-    fwrite($fp, $json);
-    fclose($fp);
+function writeToFile($filename, $data) {
+    $builder = new JsonBuilder();
+    $builder->setValue('[0]', $data);
+    $json = $builder->build();
+
+    file_put_contents($filename, $json.PHP_EOL, FILE_APPEND);
+//    $fp = fopen($filename, 'w');
+//    fwrite($fp, $json);
+//    fclose($fp);
 }
