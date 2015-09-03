@@ -99,14 +99,20 @@ function removeDateServiceIdPairFromPairs($dateServiceIdPair, $pairs) {
 // Now our pairs are a merge of calendars and calendar_dates
 // Time for generating departures and arrivals
 
-generateArrivals($date_serviceId_pairs, $entityManager);
+generateArrivalsDepartures($date_serviceId_pairs, $entityManager);
 
-function generateArrivals($date_serviceId_pairs, $entityManager)
+/**
+ * @param $date_serviceId_pairs
+ * @param $entityManager
+ */
+function generateArrivalsDepartures($date_serviceId_pairs, $entityManager)
 {
-    //$arrivals = []; // all the information we want to keep goes in here
-    $builder = new JsonBuilder();
-    $builder->setValues(array());
-    $k = 0; // path to append data
+    $builderArrivals = new JsonBuilder();
+    $builderArrivals->setValues(array());
+    $builderDepartures = new JsonBuilder();
+    $builderDepartures->setValues(array());
+    $kArrivals = 0; // path to append data
+    $kDepartures = 0;
 
     // Loop through all dates
     for ($i = 0; $i < count($date_serviceId_pairs); $i++) {
@@ -132,20 +138,9 @@ function generateArrivals($date_serviceId_pairs, $entityManager)
         }
 
         $tripMatches = join(' , ', $tripMatches);
-        $sql = "
-            SELECT *
-              FROM stoptimes
-                JOIN trips
-                  ON trips.tripId = stoptimes.tripId
-                JOIN stops
-                  ON stops.stopId = stoptimes.stopId
-              WHERE stoptimes.tripId IN ( $tripMatches )
-              ORDER BY stoptimes.arrivalTime ASC;
-        ";
 
-        $stmt = $entityManager->getConnection()->prepare($sql);
-        $stmt->execute();
-        $arrivalsArray = $stmt->fetchAll();
+        // ARRIVALS
+        $arrivalsArray = queryArrivals($entityManager, $tripMatches);
 
         for ($z = 0; $z < count($arrivalsArray); $z++) {
             $arrivalData = $arrivalsArray[$z];
@@ -159,13 +154,83 @@ function generateArrivals($date_serviceId_pairs, $entityManager)
                 'gtfs:route'        => findRouteId($arrivalData['tripId'], $tripRouteIdPair)
             ];
 
-            $builder->setValue("[$k]", $arrival);
-            $k++;
+            $builderArrivals->setValue("[$kArrivals]", $arrival);
+            $kArrivals++;
+        }
+
+        // DEPARTURES
+        $departuresArray = queryDepartures($entityManager, $tripMatches);
+
+        for ($z = 0; $z < count($departuresArray); $z++) {
+            $departureData = $departuresArray[$z];
+
+            $departure = [
+                '@type'             => 'Departure',
+                'date'              => $date,
+                'gtfs:departureTime'  => substr($departureData['departureTime'], 0, 5), // we only need hh:mm
+                'gtfs:stop'         => $departureData['stopId'],
+                'gtfs:trip'         => $departureData['tripId'],
+                'gtfs:route'        => findRouteId($departureData['tripId'], $tripRouteIdPair)
+            ];
+
+            $builderDepartures->setValue("[$kDepartures]", $departure);
+            $kDepartures++;
         }
     }
 
-    $json = $builder->build();
-    var_dump($json);
+    // get agencyId for output filenames
+    $sql = "
+        SELECT *
+          FROM agency
+    ";
+
+    $stmt = $entityManager->getConnection()->prepare($sql);
+    $stmt->execute();
+    $agencyArray = $stmt->fetchAll();
+
+    // build Arrivals JSON
+    $json = $builderArrivals->build();
+    $filename = 'dist/arrivals-' . $agencyArray[0]['agencyId'] . '.json';
+    writeToFile($filename, $json);
+
+    // build Departures JSON
+    $json = $builderDepartures->build();
+    $filename = 'dist/departures-' . $agencyArray[0]['agencyId'] . '.json';
+    writeToFile($filename, $json);
+}
+
+function queryArrivals($entityManager, $trips) {
+    $sql = "
+            SELECT *
+              FROM stoptimes
+                JOIN trips
+                  ON trips.tripId = stoptimes.tripId
+                JOIN stops
+                  ON stops.stopId = stoptimes.stopId
+              WHERE stoptimes.tripId IN ( $trips )
+              ORDER BY stoptimes.arrivalTime ASC;
+        ";
+
+    $stmt = $entityManager->getConnection()->prepare($sql);
+    $stmt->execute();
+    return $stmt->fetchAll();
+}
+
+function queryDepartures($entityManager, $trips) {
+    $sql = "
+            SELECT *
+              FROM stoptimes
+                JOIN trips
+                  ON trips.tripId = stoptimes.tripId
+                JOIN stops
+                  ON stops.stopId = stoptimes.stopId
+              WHERE stoptimes.tripId IN ( $trips )
+              ORDER BY stoptimes.departureTime ASC;
+        ";
+
+    $stmt = $entityManager->getConnection()->prepare($sql);
+    $stmt->execute();
+    return $stmt->fetchAll();
 }
 
 function findRouteId($tripId, $tripRouteIdPair) {
@@ -174,4 +239,10 @@ function findRouteId($tripId, $tripRouteIdPair) {
             return $tripRouteIdPair[$i][1];
         }
     }
+}
+
+function writeToFile($filename, $json) {
+    $fp = fopen($filename, 'w');
+    fwrite($fp, $json);
+    fclose($fp);
 }
