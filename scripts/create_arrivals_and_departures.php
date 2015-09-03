@@ -71,6 +71,10 @@ $agencyArray = $stmt->fetchAll();
 $arrivalsFilename = 'dist/arrivals-' . $agencyArray[0]['agencyId'] . '.json';
 $departuresFilename = 'dist/departures-' . $agencyArray[0]['agencyId'] . '.json';
 
+// delete previous files
+unlink($arrivalsFilename);
+unlink($departuresFilename);
+
 // Now parse calendar_dates
 if (count($calendars) > 0) {
     $sql = "
@@ -82,25 +86,25 @@ if (count($calendars) > 0) {
     $calendarDates = $stmt->fetchAll();
 
     // Hopefully no memory problems
-    addCalendarDates($date_serviceIds, $calendarDates);
+    $date_serviceIdsArray = addCalendarDates($date_serviceIds, $calendarDates);
 
     // We have now merged calendars and calendar_dates
     // Time for generating departures and arrivals
-    generateArrivalsDepartures($date_serviceIds, $entityManager);
+    generateArrivalsDepartures($date_serviceIdsArray, $entityManager);
 } else {
     // There can be a lot calendar_dates in this case
     // That's why we'll get start_date and end_date from feed_info
     // Then we'll fetch all serviceIds for every day
     $sql = "
-            SELECT *
-              FROM feedInfo
+            SELECT MIN(date) startDate, MAX(date) endDate
+              FROM calendarDates
         ";
     $stmt = $entityManager->getConnection()->prepare($sql);
     $stmt->execute();
-    $feedInfo = $stmt->fetchAll();
+    $startAndEndDate = $stmt->fetchAll();
 
-    $startDate = $feedInfo['startDate'];
-    $endDate = $feedInfo['endDate'];
+    $startDate = $startAndEndDate[0]['startDate'];
+    $endDate = $startAndEndDate[0]['endDate'];
 
     // loop all days between start_date and end_date
     for ($date = strtotime($startDate); $date < strtotime($endDate); $date = strtotime('+1 day', $date)) {
@@ -110,7 +114,8 @@ if (count($calendars) > 0) {
               WHERE date = ?
         ";
         $stmt = $entityManager->getConnection()->prepare($sql);
-        $stmt->bindParam(1, date('Y-m-d', $date));
+        $d = date('Y-m-d', $date);
+        $stmt->bindParam(1, $d);
         $stmt->execute();
         $calendarDates = $stmt->fetchAll();
 
@@ -119,10 +124,15 @@ if (count($calendars) > 0) {
         generateArrivalsDepartures($date_serviceIdsArray, $entityManager);
 
         $date_serviceIds = [];
+        $date_serviceIdsArray = [];
     }
 }
 
 function addDateServiceId($data_serviceIdsArray, $date, $serviceId) {
+    if (!isset($data_serviceIdsArray[$date])) {
+        $data_serviceIdsArray[$date] = [];
+    }
+
     $data_serviceIdsArray[$date][] = $serviceId;
     return $data_serviceIdsArray;
 }
@@ -154,12 +164,12 @@ function addCalendarDates($data_serviceIdsArray, $calendarDates) {
         // When exceptionType equals 1 -> add to date_serviceId_pairs
         // When exceptionType equals 2 -> remove
         if ($calendarDate['exceptionType'] == "1") {
-            $data_serviceIds = addDateServiceId($data_serviceIdsArray, $calendarDate['date'], $calendarDate['serviceId']);
+            $data_serviceIdsArray = addDateServiceId($data_serviceIdsArray, $calendarDate['date'], $calendarDate['serviceId']);
         } else {
-            $data_serviceIds = removeDateServiceId($data_serviceIdsArray, $calendarDate['date'], $calendarDate['serviceId']);
+            $data_serviceIdsArray = removeDateServiceId($data_serviceIdsArray, $calendarDate['date'], $calendarDate['serviceId']);
         }
     }
-    return $data_serviceIds;
+    return $data_serviceIdsArray;
 }
 
 /**
@@ -218,6 +228,8 @@ function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
             writeToFile($arrivalsFilename, $arrival);
         }
 
+        unset($arrivalsArray); // free memory
+
         // DEPARTURES
         $departuresArray = queryDepartures($entityManager, $tripMatches);
 
@@ -235,6 +247,8 @@ function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
 
             writeToFile($departuresFilename, $departure);
         }
+
+        unset($departuresArray); // free memory
     }
 }
 
@@ -282,11 +296,9 @@ function findRouteId($tripId, $tripRouteIdPair) {
 
 function writeToFile($filename, $data) {
     $builder = new JsonBuilder();
-    $builder->setValue('[0]', $data);
+    $builder->setValues($data);
     $json = $builder->build();
 
+    // write new one
     file_put_contents($filename, $json.PHP_EOL, FILE_APPEND);
-//    $fp = fopen($filename, 'w');
-//    fwrite($fp, $json);
-//    fclose($fp);
 }
