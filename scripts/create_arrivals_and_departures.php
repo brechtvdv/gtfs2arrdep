@@ -209,20 +209,6 @@ function removeDateServiceId($date_serviceIdsArray, $date, $serviceId) {
         }
     }
 
-//    for ($j = 0; $j < count($date_serviceIdsArray); $j++) {
-//        if ($date_serviceIdsArray[$j][0] == $date) {
-//            for ($k = 0; $k < count($date_serviceIdsArray[$j][0]); $k++) {
-//                if ($date_serviceIdsArray[$j][0][$k] != $serviceId) {
-//                    $date_serviceIdsWithoutException[$j][0][] = $date_serviceIdsArray[$j][0][$k];
-//                } else {
-//                    // ignore exception
-//                }
-//            }
-//        } else {
-//            $date_serviceIdsWithoutException[] = $date_serviceIdsArray[$j][0];
-//        }
-// }
-
     return $date_serviceIdsWithoutException;
 }
 
