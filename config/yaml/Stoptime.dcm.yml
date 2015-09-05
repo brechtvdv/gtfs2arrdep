@@ -22,6 +22,8 @@ Stoptime:
       type: string
     stopSequence:
       type: integer
+    maxStopSequence:
+      type: integer
     stopHeadsign:
       type: string
       nullable: TRUE

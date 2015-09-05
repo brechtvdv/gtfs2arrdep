@@ -41,7 +41,7 @@ for ($i = 0; $i < count($calendars); $i++) {
     $endDate = $calendar['endDate'];
 
     // loop all days between start_date and end_date
-    for ($date = strtotime($startDate); $date < strtotime($endDate); $date = strtotime('+1 day', $date)) {
+    for ($date = strtotime($startDate); $date <= strtotime($endDate); $date = strtotime('+1 day', $date)) {
         // check if the day on this date drives
         // we use dayOfWeek as offset in calendar array
         $dayOfWeekNum = date('N',$date);
@@ -50,7 +50,7 @@ for ($i = 0; $i < count($calendars); $i++) {
             // add to pairs
             $arrdepdate = date('Y-m-d', $date);
             $service = $calendar['serviceId'];
-            addDateServiceId($date_serviceIds, $arrdepdate, $service);
+            $date_serviceIds = addDateServiceId($date_serviceIds, $arrdepdate, $service);
         }
     }
 }
@@ -194,19 +194,34 @@ function addDateServiceId($date_serviceIdsArray, $date, $serviceId) {
 function removeDateServiceId($date_serviceIdsArray, $date, $serviceId) {
     $date_serviceIdsWithoutException = [];
 
-    for ($j = 0; $j < count($date_serviceIdsArray); $j++) {
-        if ($date_serviceIdsArray[$j][0] == $date) {
-            for ($k = 0; $k < count($date_serviceIdsArray[$j][0]); $k++) {
-                if ($date_serviceIdsArray[$j][0][$k] != $serviceId) {
-                    $date_serviceIdsWithoutException[$j][0][] = $date_serviceIdsArray[$j][0][$k];
+    foreach ($date_serviceIdsArray as $dateId => $serviceIds) {
+        if ($date === $dateId) {
+            // Now check serviceIds
+            for ($k = 0; $k < count($serviceIds); $k++) {
+                if ($serviceId === $serviceIds[$k]) {
+                    // Do nothing, exception found
                 } else {
-                    // ignore exception
+                    $date_serviceIdsWithoutException[$dateId][] = $serviceIds[$k];
                 }
             }
         } else {
-            $date_serviceIdsWithoutException[] = $date_serviceIdsArray[$j][0];
+            $date_serviceIdsWithoutException[$dateId] = $date_serviceIdsArray[$dateId];
         }
     }
+
+//    for ($j = 0; $j < count($date_serviceIdsArray); $j++) {
+//        if ($date_serviceIdsArray[$j][0] == $date) {
+//            for ($k = 0; $k < count($date_serviceIdsArray[$j][0]); $k++) {
+//                if ($date_serviceIdsArray[$j][0][$k] != $serviceId) {
+//                    $date_serviceIdsWithoutException[$j][0][] = $date_serviceIdsArray[$j][0][$k];
+//                } else {
+//                    // ignore exception
+//                }
+//            }
+//        } else {
+//            $date_serviceIdsWithoutException[] = $date_serviceIdsArray[$j][0];
+//        }
+// }
 
     return $date_serviceIdsWithoutException;
 }
@@ -245,9 +260,7 @@ function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
     global $arrivalsFilename, $departuresFilename;
 
     // Loop through all dates
-    for ($i = 0; $i < count($date_serviceIdsArray); $i++) {
-        $date = array_keys($date_serviceIdsArray)[0];
-        $serviceIds = array_shift($date_serviceIdsArray);
+    foreach ($date_serviceIdsArray as $date => $serviceIds) {
 
         $serviceMatches = [];
         for ($j = 0; $j < count($serviceIds); $j++) {
@@ -286,7 +299,9 @@ function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
                 'gtfs:arrivalTime' => substr($arrivalData['arrivalTime'], 0, 5), // we only need hh:mm
                 'gtfs:stop' => $arrivalData['stopId'],
                 'gtfs:trip' => $arrivalData['tripId'],
-                'gtfs:route' => findRouteId($arrivalData['tripId'], $tripRouteIdPair)
+                'gtfs:route' => findRouteId($arrivalData['tripId'], $tripRouteIdPair),
+                'gtfs:stopSequence' => $arrivalData['stopSequence'],
+                'gtfs:maxStopSequence' => $arrivalData['maxStopSequence']
             ];
 
             writeToFile($arrivalsFilename, $arrival);
@@ -306,7 +321,9 @@ function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
                 'gtfs:departureTime' => substr($departureData['departureTime'], 0, 5), // we only need hh:mm
                 'gtfs:stop' => $departureData['stopId'],
                 'gtfs:trip' => $departureData['tripId'],
-                'gtfs:route' => findRouteId($departureData['tripId'], $tripRouteIdPair)
+                'gtfs:route' => findRouteId($departureData['tripId'], $tripRouteIdPair),
+                'gtfs:stopSequence' => $departureData['stopSequence'],
+                'gtfs:maxStopSequence' => $departureData['maxStopSequence']
             ];
 
             writeToFile($departuresFilename, $departure);

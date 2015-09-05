@@ -30,6 +30,10 @@ class Stoptime
      */
     protected $stopSequence;
     /**
+     * @var int
+     */
+    protected $maxStopSequence;
+    /**
      * @var string
      */
     protected $stopHeadsign = null;
@@ -135,6 +139,22 @@ class Stoptime
     public function setStopSequence($stopSequence)
     {
         $this->stopSequence = $stopSequence;
+    }
+
+    /**
+     * @return int
+     */
+    public function getMaxStopSequence()
+    {
+        return $this->maxStopSequence;
+    }
+
+    /**
+     * @param int $maxStopSequence
+     */
+    public function setMaxStopSequence($maxStopSequence)
+    {
+        $this->maxStopSequence = $maxStopSequence;
     }
 
     /**
