@@ -1,15 +1,30 @@
 <?php
 
+/**
+ * This script generates arrivals and departures of a GTFS feed that is loaded in MySQL database.
+ *
+ * An arrival holds the time and date of arrival of a vehicle with corresponding stop.
+ * A departure holds the time and date of departure of a vehicle with corresponding stop.
+ * See https://github.com/linkedconnections/arrdep2connections#data-models for better explanation.
+ * Those arrivals/departures are fetched in an ascending order, converted to JSON and streamed away to output file.
+ *
+ */
+
+// This is necessary for big datasets like 'De Lijn'
+// We query all trips per day and order the arrivals/departures for that day
+ini_set('memory_limit', '-1');
+
 require_once "bootstrap.php";
 
 use Ivory\JsonBuilder\JsonBuilder;
 
 date_default_timezone_set('UTC');
 
+// This holds array of dates with corresponding serviceIds
+// We need serviceIds per day to query ordered arrivals/departures
 $date_serviceIds = [];
 
-// Let's generate list of dates with corresponding serviceId of days that drive
-// From calendars
+// Let's generate list of dates with corresponding serviceId from calendars first
 $sql = "
         SELECT *
           FROM calendars
@@ -27,7 +42,7 @@ for ($i = 0; $i < count($calendars); $i++) {
 
     // loop all days between start_date and end_date
     for ($date = strtotime($startDate); $date < strtotime($endDate); $date = strtotime('+1 day', $date)) {
-        // check if the day on this date is valid drive day
+        // check if the day on this date drives
         // we use dayOfWeek as offset in calendar array
         $dayOfWeekNum = date('N',$date);
         $day = getDayFromNum($dayOfWeekNum);
@@ -37,25 +52,6 @@ for ($i = 0; $i < count($calendars); $i++) {
             $service = $calendar['serviceId'];
             addDateServiceId($date_serviceIds, $arrdepdate, $service);
         }
-    }
-}
-
-function getDayFromNum($dayOfWeekNum) {
-    switch ($dayOfWeekNum) {
-        case 1:
-            return 'monday';
-        case 2:
-            return 'tuesday';
-        case 3:
-            return 'wednesday';
-        case 4:
-            return 'thursday';
-        case 5:
-            return 'friday';
-        case 6:
-            return 'saturday';
-        case 7:
-            return 'sunday';
     }
 }
 
@@ -72,10 +68,15 @@ $arrivalsFilename = 'dist/arrivals-' . $agencyArray[0]['agencyId'] . '.json';
 $departuresFilename = 'dist/departures-' . $agencyArray[0]['agencyId'] . '.json';
 
 // delete previous files
-unlink($arrivalsFilename);
-unlink($departuresFilename);
+if (file_exists($arrivalsFilename)) {
+    unlink($arrivalsFilename);
+}
+if (file_exists($departuresFilename)) {
+    unlink($departuresFilename);
+}
 
 // Now parse calendar_dates
+// When there are calendars
 if (count($calendars) > 0) {
     $sql = "
         SELECT *
@@ -92,22 +93,34 @@ if (count($calendars) > 0) {
     // Time for generating departures and arrivals
     generateArrivalsDepartures($date_serviceIdsArray, $entityManager);
 } else {
-    // There can be a lot calendar_dates in this case
-    // That's why we'll get start_date and end_date from feed_info
-    // Then we'll fetch all serviceIds for every day
-    $sql = "
+    // There are only calendarDates, so there can be a LOT of serviceIds
+    // Check if start- and/or endDate is given as parameter
+    // Otherwise set minimum and maximum of calendar_dates
+    if (!isset($argv[1]) || !isset($arg[2])) {
+        $sql = "
             SELECT MIN(date) startDate, MAX(date) endDate
               FROM calendarDates
         ";
-    $stmt = $entityManager->getConnection()->prepare($sql);
-    $stmt->execute();
-    $startAndEndDate = $stmt->fetchAll();
+        $stmt = $entityManager->getConnection()->prepare($sql);
+        $stmt->execute();
+        $startAndEndDate = $stmt->fetchAll();
 
-    $startDate = $startAndEndDate[0]['startDate'];
-    $endDate = $startAndEndDate[0]['endDate'];
+        $startDate_ = $startAndEndDate[0]['startDate'];
+        $endDate_ = $startAndEndDate[0]['endDate'];
+
+        if (isset($argv[1])) {
+            $startDate_ = $argv[1];
+        }
+        if (isset($arg[2])) {
+            $endDate_ = $argv[2];
+        }
+    } else {
+        $startDate_ = $argv[1];
+        $endDate_ = $argv[2];
+    }
 
     // loop all days between start_date and end_date
-    for ($date = strtotime($startDate); $date < strtotime($endDate); $date = strtotime('+1 day', $date)) {
+    for ($date = strtotime($startDate_); $date < strtotime($endDate_); $date = strtotime('+1 day', $date)) {
         $sql = "
             SELECT *
               FROM calendarDates
@@ -128,40 +141,88 @@ if (count($calendars) > 0) {
     }
 }
 
-function addDateServiceId($data_serviceIdsArray, $date, $serviceId) {
-    if (!isset($data_serviceIdsArray[$date])) {
-        $data_serviceIdsArray[$date] = [];
+/**
+ * Returns day of week in string representation
+ *
+ * @param int $dayOfWeekNum Number that represents day of week, e.g. 1 for monday
+ * @return string Day of week
+ */
+function getDayFromNum($dayOfWeekNum) {
+    switch ($dayOfWeekNum) {
+        case 1:
+            return 'monday';
+        case 2:
+            return 'tuesday';
+        case 3:
+            return 'wednesday';
+        case 4:
+            return 'thursday';
+        case 5:
+            return 'friday';
+        case 6:
+            return 'saturday';
+        case 7:
+            return 'sunday';
     }
-
-    $data_serviceIdsArray[$date][] = $serviceId;
-    return $data_serviceIdsArray;
 }
 
-function removeDateServiceId($data_serviceIdsArray, $date, $serviceId) {
+/**
+ * Adds serviceId to corresponding date in date_serviceIdsArray
+ *
+ * @param array $date_serviceIdsArray Array of dates with serviceIds on corresponding date.
+ * @param string $date Date in YYYY-MM-DD format.
+ * @param int $serviceId Service identifier.
+ * @return array New date_serviceIdsArray with serviceId added to corresponding date.
+ */
+function addDateServiceId($date_serviceIdsArray, $date, $serviceId) {
+    if (!isset($date_serviceIdsArray[$date])) {
+        $date_serviceIdsArray[$date] = [];
+    }
+
+    $date_serviceIdsArray[$date][] = $serviceId;
+    return $date_serviceIdsArray;
+}
+
+/**
+ * Removes serviceId of corresponding date in date_serviceIdsArray
+ *
+ * @param array $date_serviceIdsArray Array of dates with serviceIds on corresponding date.
+ * @param string $date Date in YYYY-MM-DD format.
+ * @param int $serviceId Service identifier.
+ * @return array New date_serviceIdsArray with serviceId removed from corresponding date.
+ */
+function removeDateServiceId($date_serviceIdsArray, $date, $serviceId) {
     $date_serviceIdsWithoutException = [];
 
-    for ($j = 0; $j < count($data_serviceIdsArray); $j++) {
-        if ($data_serviceIdsArray[$j][0] == $date) {
-            for ($k = 0; $k < count($data_serviceIdsArray[$j][0]); $k++) {
-                if ($data_serviceIdsArray[$j][0][$k] != $serviceId) {
-                    $date_serviceIdsWithoutException[$j][0][] = $data_serviceIdsArray[$j][0][$k];
+    for ($j = 0; $j < count($date_serviceIdsArray); $j++) {
+        if ($date_serviceIdsArray[$j][0] == $date) {
+            for ($k = 0; $k < count($date_serviceIdsArray[$j][0]); $k++) {
+                if ($date_serviceIdsArray[$j][0][$k] != $serviceId) {
+                    $date_serviceIdsWithoutException[$j][0][] = $date_serviceIdsArray[$j][0][$k];
                 } else {
                     // ignore exception
                 }
             }
         } else {
-            $date_serviceIdsWithoutException[] = $data_serviceIdsArray[$j][0];
+            $date_serviceIdsWithoutException[] = $date_serviceIdsArray[$j][0];
         }
     }
 
     return $date_serviceIdsWithoutException;
 }
 
+/**
+ * Adds array of calendarDates to data_serviceIdsArray.
+ *
+ * @param array $data_serviceIdsArray Array of dates with serviceIds on corresponding date.
+ * @param array $calendarDates Array of calendarDates.
+ * @return array Data_serviceIdsArray with calendarDates added.
+ */
 function addCalendarDates($data_serviceIdsArray, $calendarDates) {
     for ($i = 0; $i < count($calendarDates); $i++) {
         $calendarDate = $calendarDates[$i];
 
-        // When exceptionType equals 1 -> add to date_serviceId_pairs
+        // When exceptionType equals 1 -> add to date_serviceIdsArray
         // When exceptionType equals 2 -> remove
         if ($calendarDate['exceptionType'] == "1") {
             $data_serviceIdsArray = addDateServiceId($data_serviceIdsArray, $calendarDate['date'], $calendarDate['serviceId']);
@@ -173,8 +234,11 @@ function addCalendarDates($data_serviceIdsArray, $calendarDates) {
 }
 
 /**
- * @param $date_serviceIdsArray
- * @param $entityManager
+ * Loops through date_serviceIdsArray and generates ordered list of arrivals and departures of trips per day.
+ * The arrivals and departures are written away to corresponding JSON file each time.
+ *
+ * @param array $date_serviceIdsArray Array of dates with serviceIds on corresponding date.
+ * @param mixed $entityManager Entity manager of Doctrine.
  */
 function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
 {
@@ -217,12 +281,12 @@ function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
             $arrivalData = $arrivalsArray[$z];
 
             $arrival = [
-                '@type'             => 'Arrival',
-                'date'              => $date,
-                'gtfs:arrivalTime'  => substr($arrivalData['arrivalTime'], 0, 5), // we only need hh:mm
-                'gtfs:stop'         => $arrivalData['stopId'],
-                'gtfs:trip'         => $arrivalData['tripId'],
-                'gtfs:route'        => findRouteId($arrivalData['tripId'], $tripRouteIdPair)
+                '@type' => 'Arrival',
+                'date' => $date,
+                'gtfs:arrivalTime' => substr($arrivalData['arrivalTime'], 0, 5), // we only need hh:mm
+                'gtfs:stop' => $arrivalData['stopId'],
+                'gtfs:trip' => $arrivalData['tripId'],
+                'gtfs:route' => findRouteId($arrivalData['tripId'], $tripRouteIdPair)
             ];
 
             writeToFile($arrivalsFilename, $arrival);
@@ -237,31 +301,39 @@ function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
             $departureData = $departuresArray[$z];
 
             $departure = [
-                '@type'             => 'Departure',
-                'date'              => $date,
-                'gtfs:departureTime'  => substr($departureData['departureTime'], 0, 5), // we only need hh:mm
-                'gtfs:stop'         => $departureData['stopId'],
-                'gtfs:trip'         => $departureData['tripId'],
-                'gtfs:route'        => findRouteId($departureData['tripId'], $tripRouteIdPair)
+                '@type' => 'Departure',
+                'date' => $date,
+                'gtfs:departureTime' => substr($departureData['departureTime'], 0, 5), // we only need hh:mm
+                'gtfs:stop' => $departureData['stopId'],
+                'gtfs:trip' => $departureData['tripId'],
+                'gtfs:route' => findRouteId($departureData['tripId'], $tripRouteIdPair)
             ];
 
             writeToFile($departuresFilename, $departure);
         }
-
-        unset($departuresArray); // free memory
     }
+
+    unset($departuresArray); // free memory
 }
 
+/**
+ * Queries stoptimes with certain tripIds.
+ * These stoptimes are ordered by their arrival time and represent arrival objects.
+ *
+ * @param mixed $entityManager Entity manager of Doctrine.
+ * @param string $trips String of concatenated tripIds (of one day).
+ * @return array Stoptimes that are ordered ascending by their arrival time.
+ */
 function queryArrivals($entityManager, $trips) {
     $sql = "
             SELECT *
               FROM stoptimes
-                JOIN trips
-                  ON trips.tripId = stoptimes.tripId
-                JOIN stops
-                  ON stops.stopId = stoptimes.stopId
+                -- JOIN trips
+                --  ON trips.tripId = stoptimes.tripId
+                -- JOIN stops
+                --  ON stops.stopId = stoptimes.stopId
               WHERE stoptimes.tripId IN ( $trips )
-              ORDER BY stoptimes.arrivalTime ASC;
+              ORDER BY stoptimes.arrivalTime ASC
         ";
 
     $stmt = $entityManager->getConnection()->prepare($sql);
@@ -269,16 +341,24 @@ function queryArrivals($entityManager, $trips) {
     return $stmt->fetchAll();
 }
 
+/**
+ * Queries stoptimes with certain tripIds.
+ * These stoptimes are ordered by their departure time so we have departure-objects.
+ *
+ * @param mixed $entityManager Entity manager of Doctrine.
+ * @param string $trips String of concatenated tripIds (of one day).
+ * @return array Stoptimes that are ordered ascending by their departure time.
+ */
 function queryDepartures($entityManager, $trips) {
     $sql = "
             SELECT *
               FROM stoptimes
-                JOIN trips
-                  ON trips.tripId = stoptimes.tripId
-                JOIN stops
-                  ON stops.stopId = stoptimes.stopId
+                -- JOIN trips
+                --  ON trips.tripId = stoptimes.tripId
+                -- JOIN stops
+                --  ON stops.stopId = stoptimes.stopId
               WHERE stoptimes.tripId IN ( $trips )
-              ORDER BY stoptimes.departureTime ASC;
+              ORDER BY stoptimes.departureTime ASC
         ";
 
     $stmt = $entityManager->getConnection()->prepare($sql);
@@ -286,19 +366,31 @@ function queryDepartures($entityManager, $trips) {
     return $stmt->fetchAll();
 }
 
-function findRouteId($tripId, $tripRouteIdPair) {
-    for ($i = 0; $i < count($tripRouteIdPair); $i++) {
-        if ($tripRouteIdPair[$i][0] == $tripId) {
-            return $tripRouteIdPair[$i][1];
+/**
+ * Search routeId of corresponding tripId.
+ *
+ * @param int $tripId Holds trip identifier.
+ * @param array $tripRouteIdPairs Holds mapping between tripId and routeId.
+ * @return int Returns corresponding routeId.
+ */
+function findRouteId($tripId, $tripRouteIdPairs) {
+    for ($i = 0; $i < count($tripRouteIdPairs); $i++) {
+        if ($tripRouteIdPairs[$i][0] == $tripId) {
+            return $tripRouteIdPairs[$i][1];
         }
     }
 }
 
+/**
+ * Converts data to JSON and writes/appends this to specified filename.
+ *
+ * @param string $filename Name of file to write to.
+ * @param mixed $data Data to write to file.
+ */
 function writeToFile($filename, $data) {
     $builder = new JsonBuilder();
     $builder->setValues($data);
     $json = $builder->build();
 
-    // write new one
     file_put_contents($filename, $json.PHP_EOL, FILE_APPEND);
 }

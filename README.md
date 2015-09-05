@@ -33,9 +33,12 @@ scripts/init.sh path-to-gtfs.zip
 
 ### Step 3: Run arrivals/departures generator script
 
+```bash
+php scripts/create_arrivals_and_departures.php [startDate] [endDate]
 ```
-php scripts/create_arrivals_and_departures.php
-```
+
+Parameters ```startDate``` and ```endDate``` currently only work when there's only a calendar_dates.txt file.
+The format of date must be 'YYYY-MM-DD'.
 
 ### Step 4: Done
 
