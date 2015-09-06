@@ -37,8 +37,7 @@ scripts/init.sh path-to-gtfs.zip
 php scripts/create_arrivals_and_departures.php [startDate] [endDate]
 ```
 
-Parameters ```startDate``` and ```endDate``` currently only work when there's only a calendar_dates.txt file.
-The format of date must be 'YYYY-MM-DD'.
+The format of date parameters must be 'YYYY-MM-DD'.
 
 ### Step 4: Done
 
