@@ -20,41 +20,6 @@ use Ivory\JsonBuilder\JsonBuilder;
 
 date_default_timezone_set('UTC');
 
-// This holds array of dates with corresponding serviceIds
-// We need serviceIds per day to query ordered arrivals/departures
-$date_serviceIds = [];
-
-// Let's generate list of dates with corresponding serviceId from calendars first
-$sql = "
-        SELECT *
-          FROM calendars
-    ";
-
-$stmt = $entityManager->getConnection()->prepare($sql);
-$stmt->execute();
-$calendars = $stmt->fetchAll();
-
-for ($i = 0; $i < count($calendars); $i++) {
-    $calendar = $calendars[$i];
-
-    $startDate = $calendar['startDate'];
-    $endDate = $calendar['endDate'];
-
-    // loop all days between start_date and end_date
-    for ($date = strtotime($startDate); $date <= strtotime($endDate); $date = strtotime('+1 day', $date)) {
-        // check if the day on this date drives
-        // we use dayOfWeek as offset in calendar array
-        $dayOfWeekNum = date('N',$date);
-        $day = getDayFromNum($dayOfWeekNum);
-        if ($calendar[$day] == '1') {
-            // add to pairs
-            $arrdepdate = date('Y-m-d', $date);
-            $service = $calendar['serviceId'];
-            $date_serviceIds = addDateServiceId($date_serviceIds, $arrdepdate, $service);
-        }
-    }
-}
-
 // get agencyId for output filenames
 $sql = "
         SELECT *
@@ -75,9 +40,116 @@ if (file_exists($departuresFilename)) {
     unlink($departuresFilename);
 }
 
-// Now parse calendar_dates
+// This holds array of dates with corresponding serviceIds
+// We need serviceIds per day to query ordered arrivals/departures
+$date_serviceIds = [];
+
+// Let's generate list of dates with corresponding serviceId from calendars first
+$sql = "
+        SELECT *
+          FROM calendars
+    ";
+
+$stmt = $entityManager->getConnection()->prepare($sql);
+$stmt->execute();
+$calendars = $stmt->fetchAll();
+
 // When there are calendars
 if (count($calendars) > 0) {
+    // Check if start- and/or endDate is given as parameter
+    // Otherwise set minimum and maximum of calendars
+    if (!isset($argv[1]) || !isset($argv[2])) {
+        $sql = "
+            SELECT MIN(startDate) startDate, MAX(endDate) endDate
+              FROM calendars
+        ";
+        $stmt = $entityManager->getConnection()->prepare($sql);
+        $stmt->execute();
+        $startAndEndDate = $stmt->fetchAll();
+
+        $startDate_ = $startAndEndDate[0]['startDate'];
+        $endDate_ = $startAndEndDate[0]['endDate'];
+
+        if (isset($argv[1])) {
+            $startDate_ = $argv[1];
+        }
+        if (isset($arg[2])) {
+            $endDate_ = $argv[2];
+        }
+    } else {
+        $startDate_ = $argv[1];
+        $endDate_ = $argv[2];
+    }
+
+    for ($i = 0; $i < count($calendars); $i++) {
+        $calendar = $calendars[$i];
+
+        $startDate = $calendar['startDate'];
+        $endDate = $calendar['endDate'];
+
+        // When start- and endDate of calendar fall in given interval
+        if ($startDate >= $startDate_ && $endDate <= $endDate_) {
+            // loop all days between start_date and end_date
+            for ($date = strtotime($startDate); $date <= strtotime($endDate); $date = strtotime('+1 day', $date)) {
+                // check if the day on this date drives
+                // we use dayOfWeek as offset in calendar array
+                $dayOfWeekNum = date('N',$date);
+                $day = getDayFromNum($dayOfWeekNum);
+                if ($calendar[$day] == '1') {
+                    // add to pairs
+                    $arrdepdate = date('Y-m-d', $date);
+                    $service = $calendar['serviceId'];
+                    $date_serviceIds = addDateServiceId($date_serviceIds, $arrdepdate, $service);
+                }
+            }
+        } else if ($startDate < $startDate_ && $endDate <= $endDate_) {
+            // StartDate falls before given startDate_
+            for ($date = strtotime($startDate_); $date <= strtotime($endDate); $date = strtotime('+1 day', $date)) {
+                // check if the day on this date drives
+                // we use dayOfWeek as offset in calendar array
+                $dayOfWeekNum = date('N',$date);
+                $day = getDayFromNum($dayOfWeekNum);
+                if ($calendar[$day] == '1') {
+                    // add to pairs
+                    $arrdepdate = date('Y-m-d', $date);
+                    $service = $calendar['serviceId'];
+                    $date_serviceIds = addDateServiceId($date_serviceIds, $arrdepdate, $service);
+                }
+            }
+        } else if ($startDate >= $startDate_ && $endDate > $endDate_) {
+            // EndDate falls after given endDate_
+            for ($date = strtotime($startDate); $date <= strtotime($endDate_); $date = strtotime('+1 day', $date)) {
+                // check if the day on this date drives
+                // we use dayOfWeek as offset in calendar array
+                $dayOfWeekNum = date('N',$date);
+                $day = getDayFromNum($dayOfWeekNum);
+                if ($calendar[$day] == '1') {
+                    // add to pairs
+                    $arrdepdate = date('Y-m-d', $date);
+                    $service = $calendar['serviceId'];
+                    $date_serviceIds = addDateServiceId($date_serviceIds, $arrdepdate, $service);
+                }
+            }
+        } else if ($startDate < $startDate_ && $endDate > $endDate_) {
+            // Both overlap interval
+            for ($date = strtotime($startDate_); $date <= strtotime($endDate_); $date = strtotime('+1 day', $date)) {
+                // check if the day on this date drives
+                // we use dayOfWeek as offset in calendar array
+                $dayOfWeekNum = date('N',$date);
+                $day = getDayFromNum($dayOfWeekNum);
+                if ($calendar[$day] == '1') {
+                    // add to pairs
+                    $arrdepdate = date('Y-m-d', $date);
+                    $service = $calendar['serviceId'];
+                    $date_serviceIds = addDateServiceId($date_serviceIds, $arrdepdate, $service);
+                }
+            }
+        } else {
+            // No intersection with given parameters
+        }
+    }
+
+    // Parse calendarDates
     $sql = "
         SELECT *
           FROM calendarDates
