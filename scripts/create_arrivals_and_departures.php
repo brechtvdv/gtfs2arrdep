@@ -48,7 +48,7 @@ file_put_contents($departuresFilename, '['.PHP_EOL, FILE_APPEND);
 
 // This holds array of dates with corresponding serviceIds
 // We need serviceIds per day to query ordered arrivals/departures
-$date_serviceIds = [];
+$date_serviceIdsArray = [];
 
 // Let's generate list of dates with corresponding serviceId from calendars first
 $sql = "
@@ -95,6 +95,11 @@ if (count($calendars) > 0) {
 
         // When start- and endDate of calendar fall in given interval
         if ($startDate >= $startDate_ && $endDate <= $endDate_) {
+            // Arrdeps that happen after midnight of the previous day need to be added too
+            $prevDate = strtotime('-1 day', $startDate);
+            $calendarDates = getCalendarDatesOfSpecificDate($entityManager, $prevDate);
+            $date_serviceIdsArray = addCalendarDates($date_serviceIdsArray, $calendarDates);
+
             // loop all days between start_date and end_date
             for ($date = strtotime($startDate); $date <= strtotime($endDate); $date = strtotime('+1 day', $date)) {
                 // check if the day on this date drives
@@ -105,10 +110,15 @@ if (count($calendars) > 0) {
                     // add to pairs
                     $arrdepdate = date('Y-m-d', $date);
                     $service = $calendar['serviceId'];
-                    $date_serviceIds = addDateServiceId($date_serviceIds, $arrdepdate, $service);
+                    $date_serviceIdsArray = addDateServiceId($date_serviceIdsArray, $arrdepdate, $service);
                 }
             }
         } else if ($startDate < $startDate_ && $endDate <= $endDate_) {
+            // Arrdeps that happen after midnight of the previous day need to be added too
+            $prevDate = strtotime('-1 day', $startDate_);
+            $calendarDates = getCalendarDatesOfSpecificDate($entityManager, $prevDate);
+            $date_serviceIdsArray = addCalendarDates($date_serviceIdsArray, $calendarDates);
+
             // StartDate falls before given startDate_
             for ($date = strtotime($startDate_); $date <= strtotime($endDate); $date = strtotime('+1 day', $date)) {
                 // check if the day on this date drives
@@ -119,10 +129,15 @@ if (count($calendars) > 0) {
                     // add to pairs
                     $arrdepdate = date('Y-m-d', $date);
                     $service = $calendar['serviceId'];
-                    $date_serviceIds = addDateServiceId($date_serviceIds, $arrdepdate, $service);
+                    $date_serviceIdsArray = addDateServiceId($date_serviceIdsArray, $arrdepdate, $service);
                 }
             }
         } else if ($startDate >= $startDate_ && $endDate > $endDate_) {
+            // Arrdeps that happen after midnight of the previous day need to be added too
+            $prevDate = strtotime('-1 day', $startDate);
+            $calendarDates = getCalendarDatesOfSpecificDate($entityManager, $prevDate);
+            $date_serviceIdsArray = addCalendarDates($date_serviceIdsArray, $calendarDates);
+
             // EndDate falls after given endDate_
             for ($date = strtotime($startDate); $date <= strtotime($endDate_); $date = strtotime('+1 day', $date)) {
                 // check if the day on this date drives
@@ -133,10 +148,15 @@ if (count($calendars) > 0) {
                     // add to pairs
                     $arrdepdate = date('Y-m-d', $date);
                     $service = $calendar['serviceId'];
-                    $date_serviceIds = addDateServiceId($date_serviceIds, $arrdepdate, $service);
+                    $date_serviceIdsArray = addDateServiceId($date_serviceIdsArray, $arrdepdate, $service);
                 }
             }
         } else if ($startDate < $startDate_ && $endDate > $endDate_) {
+            // Arrdeps that happen after midnight of the previous day need to be added too
+            $prevDate = strtotime('-1 day', $startDate_);
+            $calendarDates = getCalendarDatesOfSpecificDate($entityManager, $prevDate);
+            $date_serviceIdsArray = addCalendarDates($date_serviceIdsArray, $calendarDates);
+
             // Both overlap interval
             for ($date = strtotime($startDate_); $date <= strtotime($endDate_); $date = strtotime('+1 day', $date)) {
                 // check if the day on this date drives
@@ -147,7 +167,7 @@ if (count($calendars) > 0) {
                     // add to pairs
                     $arrdepdate = date('Y-m-d', $date);
                     $service = $calendar['serviceId'];
-                    $date_serviceIds = addDateServiceId($date_serviceIds, $arrdepdate, $service);
+                    $date_serviceIdsArray = addDateServiceId($date_serviceIdsArray, $arrdepdate, $service);
                 }
             }
         } else {
@@ -165,7 +185,7 @@ if (count($calendars) > 0) {
     $calendarDates = $stmt->fetchAll();
 
     // Hopefully no memory problems
-    $date_serviceIdsArray = addCalendarDates($date_serviceIds, $calendarDates);
+    $date_serviceIdsArray = addCalendarDates($date_serviceIdsArray, $calendarDates);
 
     // We have now merged calendars and calendar_dates
     // Time for generating departures and arrivals
@@ -201,25 +221,23 @@ if (count($calendars) > 0) {
         $endDate_ = $argv[2];
     }
 
+    // Arrdeps that happen after midnight of the previous day need to be added too
+    $prevDate = strtotime('-1 day', strtotime($startDate_));
+    $calendarDates = getCalendarDatesOfSpecificDate($entityManager, $prevDate);
+
+    $prevDate_serviceIdsArray = addCalendarDates($date_serviceIdsArray, $calendarDates);
+    $date_serviceIdsArray = $prevDate_serviceIdsArray;
+
     // loop all days between start_date and end_date
     for ($date = strtotime($startDate_); $date <= strtotime($endDate_); $date = strtotime('+1 day', $date)) {
-        $sql = "
-            SELECT *
-              FROM calendarDates
-              WHERE date = ?
-        ";
-        $stmt = $entityManager->getConnection()->prepare($sql);
-        $d = date('Y-m-d', $date);
-        $stmt->bindParam(1, $d);
-        $stmt->execute();
-        $calendarDates = $stmt->fetchAll();
+        $calendarDates = getCalendarDatesOfSpecificDate($entityManager, $date);
 
-        $date_serviceIdsArray = addCalendarDates($date_serviceIds, $calendarDates);
+        $date_serviceIdsArray = addCalendarDates($date_serviceIdsArray, $calendarDates); // holds previous date and current date
 
         generateArrivalsDepartures($date_serviceIdsArray, $entityManager);
 
-        $date_serviceIds = [];
-        $date_serviceIdsArray = [];
+        $date_serviceIdsArray = []; // empty again
+        $date_serviceIdsArray = addCalendarDates($date_serviceIdsArray, $calendarDates); // Keep track of previous day for the stoptimes after midnight
     }
 
     // Remove last EOL and comma
@@ -311,23 +329,45 @@ function removeDateServiceId($date_serviceIdsArray, $date, $serviceId) {
 /**
  * Adds array of calendarDates to data_serviceIdsArray.
  *
- * @param array $data_serviceIdsArray Array of dates with serviceIds on corresponding date.
+ * @param array $date_serviceIdsArray Array of dates with serviceIds on corresponding date.
  * @param array $calendarDates Array of calendarDates.
- * @return array Data_serviceIdsArray with calendarDates added.
+ * @return array Date_serviceIdsArray with calendarDates added.
  */
-function addCalendarDates($data_serviceIdsArray, $calendarDates) {
+function addCalendarDates($date_serviceIdsArray, $calendarDates) {
     for ($i = 0; $i < count($calendarDates); $i++) {
         $calendarDate = $calendarDates[$i];
 
         // When exceptionType equals 1 -> add to date_serviceIdsArray
         // When exceptionType equals 2 -> remove
         if ($calendarDate['exceptionType'] == "1") {
-            $data_serviceIdsArray = addDateServiceId($data_serviceIdsArray, $calendarDate['date'], $calendarDate['serviceId']);
+            $date_serviceIdsArray = addDateServiceId($date_serviceIdsArray, $calendarDate['date'], $calendarDate['serviceId']);
         } else {
-            $data_serviceIdsArray = removeDateServiceId($data_serviceIdsArray, $calendarDate['date'], $calendarDate['serviceId']);
+            $date_serviceIdsArray = removeDateServiceId($date_serviceIdsArray, $calendarDate['date'], $calendarDate['serviceId']);
         }
     }
-    return $data_serviceIdsArray;
+    return $date_serviceIdsArray;
+}
+
+/**
+ * Adds calendar dates of specific day.
+ *
+ * @param mixed $entityManager Doctrine entity manager.
+ * @param string $date Holds date of day.
+ * @return array Date_serviceIdsArray with calendarDates of day added.
+ */
+function getCalendarDatesOfSpecificDate($entityManager, $date) {
+    $sql = "
+            SELECT *
+              FROM calendarDates
+              WHERE date = ?
+        ";
+    $stmt = $entityManager->getConnection()->prepare($sql);
+    $d = date('Y-m-d', $date);
+    $stmt->bindParam(1, $d);
+    $stmt->execute();
+    $calendarDates = $stmt->fetchAll();
+
+    return $calendarDates;
 }
 
 /**
@@ -340,6 +380,8 @@ function addCalendarDates($data_serviceIdsArray, $calendarDates) {
 function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
 {
     global $arrivalsFilename, $departuresFilename;
+
+    $firstLoop = true; // First date is previous date that we need to retrieve stoptimes after midnight
 
     // Loop through all dates
     foreach ($date_serviceIdsArray as $date => $serviceIds) {
@@ -369,24 +411,41 @@ function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
 
         $tripMatches = join(' , ', $tripMatches);
 
+        if ($firstLoop) {
+            $prevDayTripMatches = $tripMatches;
+            $firstLoop = false;
+            continue;
+        }
+
         // ARRIVALS
         $arrivalsArray = queryArrivals($entityManager, $tripMatches);
 
-        for ($z = 0; $z < count($arrivalsArray); $z++) {
-            $arrivalData = $arrivalsArray[$z];
+        // Search arrivals that happen after midnight of previous day
+        $arrivalsAfterMidnight = queryArrivalsAfterMidnight($entityManager, $prevDayTripMatches);
 
-            $arrival = [
-                '@type' => 'Arrival',
-                'date' => $date,
-                'gtfs:arrivalTime' => substr($arrivalData['arrivalTime'], 0, 5), // we only need hh:mm
-                'gtfs:stop' => $arrivalData['stopId'],
-                'gtfs:trip' => $arrivalData['tripId'],
-                'gtfs:route' => findRouteId($arrivalData['tripId'], $tripRouteIdPair),
-                'gtfs:stopSequence' => $arrivalData['stopSequence'],
-                'maxStopSequence' => $arrivalData['maxStopSequence']
-            ];
+        // mergeAndWrite('arrivalTime', $arrivalsArray, $arrivalsAfterMidnight);
 
-            writeToFile($arrivalsFilename, $arrival);
+        // Merge sort
+        $i = 0;
+        $j = 0;
+        while ($i < count($arrivalsArray) && $j < count($arrivalsAfterMidnight)) {
+            if ($arrivalsArray[$i]['arrivalTime'] < $arrivalsAfterMidnight[$j]['arrivalTime']) {
+                $arrivalData = $arrivalsArray[$i++];
+            } else {
+                $arrivalData = $arrivalsAfterMidnight[$j++];
+            }
+
+            writeToFile($arrivalsFilename, generateArrival($arrivalData, $date, $tripRouteIdPair));
+        }
+
+        while ($i < count($arrivalsArray)) {
+            $arrivalData = $arrivalsArray[$i++];
+            writeToFile($arrivalsFilename, generateArrival($arrivalData, $date, $tripRouteIdPair));
+        }
+
+        while ($j < count($arrivalsAfterMidnight)) {
+            $arrivalData = $arrivalsAfterMidnight[$j++];
+            writeToFile($arrivalsFilename, generateArrival($arrivalData, $date, $tripRouteIdPair));
         }
 
         unset($arrivalsArray); // free memory
@@ -394,25 +453,74 @@ function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
         // DEPARTURES
         $departuresArray = queryDepartures($entityManager, $tripMatches);
 
-        for ($z = 0; $z < count($departuresArray); $z++) {
-            $departureData = $departuresArray[$z];
+        // Search departures that happen after midnight of previous day
+        $departuresAfterMidnight = queryDeparturesAfterMidnight($entityManager, $prevDayTripMatches);
 
-            $departure = [
-                '@type' => 'Departure',
-                'date' => $date,
-                'gtfs:departureTime' => substr($departureData['departureTime'], 0, 5), // we only need hh:mm
-                'gtfs:stop' => $departureData['stopId'],
-                'gtfs:trip' => $departureData['tripId'],
-                'gtfs:route' => findRouteId($departureData['tripId'], $tripRouteIdPair),
-                'stopSequence' => $departureData['stopSequence'],
-                'maxStopSequence' => $departureData['maxStopSequence']
-            ];
+        // Merge sort
+        $i = 0;
+        $j = 0;
+        while ($i < count($departuresArray) && $j < count($departuresAfterMidnight)) {
+            if ($departuresArray[$i]['departureTime'] < $departuresAfterMidnight[$j]['departureTime']) {
+                $departureData = $departuresArray[$i++];
+            } else {
+                $departureData = $departuresAfterMidnight[$j++];
+            }
 
-            writeToFile($departuresFilename, $departure);
+            writeToFile($departuresFilename, generateDeparture($departureData, $date, $tripRouteIdPair));
         }
-    }
 
-    unset($departuresArray); // free memory
+        while ($i < count($departuresArray)) {
+            $departureData = $departuresArray[$i++];
+            writeToFile($departuresFilename, $departureData($departureData, $date, $tripRouteIdPair));
+        }
+
+        while ($j < count($departuresAfterMidnight)) {
+            $departureData = $arrivalsAfterMidnight[$j++];
+            writeToFile($departuresFilename, $departureData($departureData, $date, $tripRouteIdPair));
+        }
+
+        unset($departuresArray); // free memory
+
+        $prevDayTripMatches = $tripMatches;
+    }
+}
+
+/**
+ * @param $arrivalData Stoptime that is sorted by arrivalTime.
+ * @param $date Date in HH:MM:SS format.
+ * @param $tripRouteIdPair Array that holds mapping between tripIDs and routeIDs.
+ * @return array Arrival.
+ */
+function generateArrival($arrivalData, $date, $tripRouteIdPair) {
+    return [
+        '@type' => 'Arrival',
+        'date' => $date,
+        'gtfs:arrivalTime' => substr($arrivalData['arrivalTime'], 0, 5), // we only need hh:mm
+        'gtfs:stop' => $arrivalData['stopId'],
+        'gtfs:trip' => $arrivalData['tripId'],
+        'gtfs:route' => findRouteId($arrivalData['tripId'], $tripRouteIdPair),
+        'gtfs:stopSequence' => $arrivalData['stopSequence'],
+        'maxStopSequence' => $arrivalData['maxStopSequence']
+    ];
+}
+
+/**
+ * @param $departureData Stoptime that is sorted by departureTime.
+ * @param $date Date in HH:MM:SS format.
+ * @param $tripRouteIdPair Array that holds mapping between tripIDs and routeIDs.
+ * @return array Departure.
+ */
+function generateDeparture($departureData, $date, $tripRouteIdPair) {
+    return [
+        '@type' => 'Departure',
+        'date' => $date,
+        'gtfs:departureTime' => substr($departureData['departureTime'], 0, 5), // we only need hh:mm
+        'gtfs:stop' => $departureData['stopId'],
+        'gtfs:trip' => $departureData['tripId'],
+        'gtfs:route' => findRouteId($departureData['tripId'], $tripRouteIdPair),
+        'stopSequence' => $departureData['stopSequence'],
+        'maxStopSequence' => $departureData['maxStopSequence']
+    ];
 }
 
 /**
@@ -459,6 +567,56 @@ function queryDepartures($entityManager, $trips) {
                 --  ON stops.stopId = stoptimes.stopId
               WHERE stoptimes.tripId IN ( $trips )
                 AND NOT stoptimes.departureAfterMidnight
+              ORDER BY stoptimes.departureTime ASC
+        ";
+
+    $stmt = $entityManager->getConnection()->prepare($sql);
+    $stmt->execute();
+    return $stmt->fetchAll();
+}
+
+/**
+ * Returns arrivals that happen after midnight
+ *
+ * @param $entityManager Doctrine entity manager.
+ * @param $prevDayTripMatches Trips of previous day.
+ * @return mixed Arrivals after midnight.
+ */
+function queryArrivalsAfterMidnight($entityManager, $prevDayTripMatches) {
+    $sql = "
+            SELECT *
+              FROM stoptimes
+                -- JOIN trips
+                --  ON trips.tripId = stoptimes.tripId
+                -- JOIN stops
+                --  ON stops.stopId = stoptimes.stopId
+              WHERE stoptimes.tripId IN ( $prevDayTripMatches )
+                AND stoptimes.arrivalAfterMidnight
+              ORDER BY stoptimes.arrivalTime ASC
+        ";
+
+    $stmt = $entityManager->getConnection()->prepare($sql);
+    $stmt->execute();
+    return $stmt->fetchAll();
+}
+
+/**
+ * Returns departures that happen after midnight
+ *
+ * @param $entityManager Doctrine entity manager.
+ * @param $prevDayTripMatches Trips of previous day.
+ * @return mixed Departures after midnight.
+ */
+function queryDeparturesAfterMidnight($entityManager, $prevDayTripMatches) {
+    $sql = "
+            SELECT *
+              FROM stoptimes
+                -- JOIN trips
+                --  ON trips.tripId = stoptimes.tripId
+                -- JOIN stops
+                --  ON stops.stopId = stoptimes.stopId
+              WHERE stoptimes.tripId IN ( $prevDayTripMatches )
+                AND stoptimes.departureAfterMidnight
               ORDER BY stoptimes.departureTime ASC
         ";
 
