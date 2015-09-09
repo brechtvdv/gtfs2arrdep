@@ -168,7 +168,7 @@ if (count($calendars) > 0) {
     // There are only calendarDates, so there can be a LOT of serviceIds
     // Check if start- and/or endDate is given as parameter
     // Otherwise set minimum and maximum of calendar_dates
-    if (!isset($argv[1]) || !isset($arg[2])) {
+    if (!isset($argv[1]) || !isset($argv[2])) {
         $sql = "
             SELECT MIN(date) startDate, MAX(date) endDate
               FROM calendarDates
