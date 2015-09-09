@@ -34,6 +34,14 @@ class Stoptime
      */
     protected $maxStopSequence;
     /**
+     * @var boolean
+     */
+    protected $arrivalAfterMidnight;
+    /**
+     * @var boolean
+     */
+    protected $departureAfterMidnight;
+    /**
      * @var string
      */
     protected $stopHeadsign = null;
@@ -155,6 +163,38 @@ class Stoptime
     public function setMaxStopSequence($maxStopSequence)
     {
         $this->maxStopSequence = $maxStopSequence;
+    }
+
+    /**
+     * @return boolean
+     */
+    public function isArrivalAfterMidnight()
+    {
+        return $this->arrivalAfterMidnight;
+    }
+
+    /**
+     * @param boolean $afterMidnight
+     */
+    public function setArrivalAfterMidnight($afterMidnight)
+    {
+        $this->arrivalAfterMidnight = $afterMidnight;
+    }
+
+    /**
+     * @return boolean
+     */
+    public function isDepartureAfterMidnight()
+    {
+        return $this->departureAfterMidnight;
+    }
+
+    /**
+     * @param boolean $departureAfterMidnight
+     */
+    public function setDepartureAfterMidnight($departureAfterMidnight)
+    {
+        $this->departureAfterMidnight = $departureAfterMidnight;
     }
 
     /**

@@ -24,6 +24,10 @@ Stoptime:
       type: integer
     maxStopSequence:
       type: integer
+    arrivalAfterMidnight:
+      type: boolean
+    departureAfterMidnight:
+      type: boolean
     stopHeadsign:
       type: string
       nullable: TRUE

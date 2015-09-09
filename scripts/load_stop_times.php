@@ -39,7 +39,7 @@ if (($handleRead = fopen($file_stop_times, 'r')) !== false) {
             $maxStopSequence = $stopTime->getStopSequence();
         } else {
             // New trip started so update previous one
-            updateMaxStopSequenceOfStopTimes($stopTimesOfSameTrip, $maxStopSequence);
+            updateMaxStopSequenceAndAfterMidnightOfStopTimes($stopTimesOfSameTrip, $maxStopSequence);
             persistAndFlushStopTimes($entityManager, $stopTimesOfSameTrip);
             $stopTimesOfSameTrip = []; // new trip -> new stoptimes sequence
             $currentTripId = $stopTime->getTripId();
@@ -54,7 +54,7 @@ if (($handleRead = fopen($file_stop_times, 'r')) !== false) {
 
     fclose($handleRead);
 
-    updateMaxStopSequenceOfStopTimes($stopTimesOfSameTrip, $maxStopSequence);
+    updateMaxStopSequenceAndAfterMidnightOfStopTimes($stopTimesOfSameTrip, $maxStopSequence);
     persistAndFlushStopTimes($entityManager, $stopTimesOfSameTrip);
 
     echo "Created " . $row . " stoptimes" . "\n";
@@ -68,9 +68,34 @@ if (($handleRead = fopen($file_stop_times, 'r')) !== false) {
  * @param array $stopTimes Array of stopTimes.
  * @param int $maxStopSequence Maximum stopSequence number.
  */
-function updateMaxStopSequenceOfStopTimes($stopTimes, $maxStopSequence) {
+function updateMaxStopSequenceAndAfterMidnightOfStopTimes($stopTimes, $maxStopSequence) {
+    $arrivalAfterMidnight = false; // there is always a transition of dates
+    $departureAfterMidnight = false;
+    $prevStopTime = null;
+
     for ($i = 0; $i < count($stopTimes); $i++) {
-        save($stopTimes[$i], 'max_stop_sequence', $maxStopSequence);
+        $stopTime = $stopTimes[$i];
+        save($stopTime, 'max_stop_sequence', $maxStopSequence);
+
+        // Check arrivalTime if after midnight
+        if ($arrivalAfterMidnight) {
+            save($stopTime, 'arrival_after_midnight',$arrivalAfterMidnight);
+        } else if ($i > 0 && $stopTime->getArrivalTime()->format('H') < $prevStopTime->getArrivalTime()->format('H')) {
+            $arrivalAfterMidnight = true;
+        }
+
+        save($stopTime, 'arrival_after_midnight',$arrivalAfterMidnight);
+
+        // Check departureTime if after midnight
+        if ($departureAfterMidnight) {
+            save($stopTime, 'departure_after_midnight',$departureAfterMidnight);
+        } else if ($i > 0 && $stopTime->getDepartureTime()->format('H') < $prevStopTime->getDepartureTime()->format('H')) {
+            $departureAfterMidnight = true;
+        }
+
+        save($stopTime, 'departure_after_midnight',$departureAfterMidnight);
+
+        $prevStopTime = $stopTime;
     }
 }
 
@@ -118,6 +143,12 @@ function save($stoptime, $property, $value) {
             break;
         case 'max_stop_sequence':
             $stoptime->setMaxStopSequence($value);
+            break;
+        case 'arrival_after_midnight':
+            $stoptime->setArrivalAfterMidnight($value);
+            break;
+        case 'departure_after_midnight':
+            $stoptime->setDepartureAfterMidnight($value);
             break;
         case 'stop_headsign':
             $stoptime->setStopHeadsign($value);
