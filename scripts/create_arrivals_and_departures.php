@@ -40,6 +40,12 @@ if (file_exists($departuresFilename)) {
     unlink($departuresFilename);
 }
 
+// Write [ to files
+// We want valid JSON, that's why we need to add [ in the beginning and ] at the end
+// Between every arrival and departure object is also a comma added
+file_put_contents($arrivalsFilename, '['.PHP_EOL, FILE_APPEND);
+file_put_contents($departuresFilename, '['.PHP_EOL, FILE_APPEND);
+
 // This holds array of dates with corresponding serviceIds
 // We need serviceIds per day to query ordered arrivals/departures
 $date_serviceIds = [];
@@ -164,6 +170,10 @@ if (count($calendars) > 0) {
     // We have now merged calendars and calendar_dates
     // Time for generating departures and arrivals
     generateArrivalsDepartures($date_serviceIdsArray, $entityManager);
+
+    // Add ] at end of file, so JSON is valid
+    file_put_contents($arrivalsFilename, ']'.PHP_EOL, FILE_APPEND);
+    file_put_contents($departuresFilename, ']'.PHP_EOL, FILE_APPEND);
 } else {
     // There are only calendarDates, so there can be a LOT of serviceIds
     // Check if start- and/or endDate is given as parameter
@@ -192,7 +202,7 @@ if (count($calendars) > 0) {
     }
 
     // loop all days between start_date and end_date
-    for ($date = strtotime($startDate_); $date < strtotime($endDate_); $date = strtotime('+1 day', $date)) {
+    for ($date = strtotime($startDate_); $date <= strtotime($endDate_); $date = strtotime('+1 day', $date)) {
         $sql = "
             SELECT *
               FROM calendarDates
@@ -211,6 +221,20 @@ if (count($calendars) > 0) {
         $date_serviceIds = [];
         $date_serviceIdsArray = [];
     }
+
+    // Remove last EOL and comma
+    $fh = fopen($arrivalsFilename, 'r+') or die("can't open file");
+    $stat = fstat($fh);
+    ftruncate($fh, $stat['size']-2);
+    fclose($fh);
+    $fh = fopen($departuresFilename, 'r+') or die("can't open file");
+    $stat = fstat($fh);
+    ftruncate($fh, $stat['size']-2);
+    fclose($fh);
+
+    // Add ] at end of file, so JSON is valid
+    file_put_contents($arrivalsFilename, PHP_EOL.']', FILE_APPEND);
+    file_put_contents($departuresFilename, PHP_EOL.']', FILE_APPEND);
 }
 
 /**
@@ -359,7 +383,7 @@ function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
                 'gtfs:trip' => $arrivalData['tripId'],
                 'gtfs:route' => findRouteId($arrivalData['tripId'], $tripRouteIdPair),
                 'gtfs:stopSequence' => $arrivalData['stopSequence'],
-                'gtfs:maxStopSequence' => $arrivalData['maxStopSequence']
+                'maxStopSequence' => $arrivalData['maxStopSequence']
             ];
 
             writeToFile($arrivalsFilename, $arrival);
@@ -380,8 +404,8 @@ function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
                 'gtfs:stop' => $departureData['stopId'],
                 'gtfs:trip' => $departureData['tripId'],
                 'gtfs:route' => findRouteId($departureData['tripId'], $tripRouteIdPair),
-                'gtfs:stopSequence' => $departureData['stopSequence'],
-                'gtfs:maxStopSequence' => $departureData['maxStopSequence']
+                'stopSequence' => $departureData['stopSequence'],
+                'maxStopSequence' => $departureData['maxStopSequence']
             ];
 
             writeToFile($departuresFilename, $departure);
@@ -408,6 +432,7 @@ function queryArrivals($entityManager, $trips) {
                 -- JOIN stops
                 --  ON stops.stopId = stoptimes.stopId
               WHERE stoptimes.tripId IN ( $trips )
+                AND NOT stoptimes.arrivalAfterMidnight
               ORDER BY stoptimes.arrivalTime ASC
         ";
 
@@ -433,6 +458,7 @@ function queryDepartures($entityManager, $trips) {
                 -- JOIN stops
                 --  ON stops.stopId = stoptimes.stopId
               WHERE stoptimes.tripId IN ( $trips )
+                AND NOT stoptimes.departureAfterMidnight
               ORDER BY stoptimes.departureTime ASC
         ";
 
@@ -466,6 +492,9 @@ function writeToFile($filename, $data) {
     $builder = new JsonBuilder();
     $builder->setValues($data);
     $json = $builder->build();
+
+    // Add comma at end of object so JSON file will be valid
+    $json .= ',';
 
     file_put_contents($filename, $json.PHP_EOL, FILE_APPEND);
 }
