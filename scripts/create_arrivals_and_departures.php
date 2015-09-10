@@ -516,7 +516,7 @@ function generateDeparture($departureData, $date, $tripRouteIdPair) {
         'gtfs:stop' => $departureData['stopId'],
         'gtfs:trip' => $departureData['tripId'],
         'gtfs:route' => findRouteId($departureData['tripId'], $tripRouteIdPair),
-        'stopSequence' => $departureData['stopSequence'],
+        'gtfs:stopSequence' => $departureData['stopSequence'],
         'maxStopSequence' => $departureData['maxStopSequence']
     ];
 }
