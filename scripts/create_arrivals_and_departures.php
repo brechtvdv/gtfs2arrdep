@@ -423,8 +423,6 @@ function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
         // Search arrivals that happen after midnight of previous day
         $arrivalsAfterMidnight = queryArrivalsAfterMidnight($entityManager, $prevDayTripMatches);
 
-        // mergeAndWrite('arrivalTime', $arrivalsArray, $arrivalsAfterMidnight);
-
         // Merge sort
         $i = 0;
         $j = 0;
@@ -471,12 +469,12 @@ function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
 
         while ($i < count($departuresArray)) {
             $departureData = $departuresArray[$i++];
-            writeToFile($departuresFilename, $departureData($departureData, $date, $tripRouteIdPair));
+            writeToFile($departuresFilename, generateDeparture($departureData, $date, $tripRouteIdPair));
         }
 
         while ($j < count($departuresAfterMidnight)) {
             $departureData = $arrivalsAfterMidnight[$j++];
-            writeToFile($departuresFilename, $departureData($departureData, $date, $tripRouteIdPair));
+            writeToFile($departuresFilename, generateDeparture($departureData, $date, $tripRouteIdPair));
         }
 
         unset($departuresArray); // free memory
