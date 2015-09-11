@@ -487,7 +487,7 @@ function generateArrival($arrivalData, $date, $tripRouteIdPair, $arrivalNr) {
         '@id' => 'arrival:' . $arrivalNr,
         'date' => $date,
         'arrivalTime' => substr($arrivalData['arrivalTime'], 0, 5), // we only need hh:mm
-        'arrivalStop' => $arrivalData['stopId'],
+        'stop' => $arrivalData['stopId'],
         'trip' => $arrivalData['tripId'],
         'route' => findRouteId($arrivalData['tripId'], $tripRouteIdPair),
         'stopSequence' => $arrivalData['stopSequence'],
@@ -508,7 +508,7 @@ function generateDeparture($departureData, $date, $tripRouteIdPair, $departureNr
         '@id' => 'departure:' . $departureNr,
         'date' => $date,
         'departureTime' => substr($departureData['departureTime'], 0, 5), // we only need hh:mm
-        'departureStop' => $departureData['stopId'],
+        'stop' => $departureData['stopId'],
         'trip' => $departureData['tripId'],
         'route' => findRouteId($departureData['tripId'], $tripRouteIdPair),
         'stopSequence' => $departureData['stopSequence'],
@@ -647,10 +647,9 @@ function createContext($agencyId) {
             "departure"     => "http://irail.be/departures/" . $agencyId . "/",
             "Arrival"       => "http://semweb.mmlab.be/ns/stoptimes#Arrival",
             "arrivalTime"   => "gtfs:arrivalTime",
-            "arrivalStop"   => "gtfs:stop",
             "Departure"     => "http://semweb.mmlab.be/ns/stoptimes#Departure",
             "departureTime" => "gtfs:departureTime",
-            "departureStop" => "gtfs:stop"
+            "stop" => "gtfs:stop"
         ]
     ];
 }
