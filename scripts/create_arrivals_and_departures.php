@@ -29,8 +29,9 @@ $sql = "
 $stmt = $entityManager->getConnection()->prepare($sql);
 $stmt->execute();
 $agencyArray = $stmt->fetchAll();
-$arrivalsFilename = 'dist/arrivals-' . $agencyArray[0]['agencyId'] . '.json';
-$departuresFilename = 'dist/departures-' . $agencyArray[0]['agencyId'] . '.json';
+$agencyId = $agencyArray[0]['agencyId'];
+$arrivalsFilename = 'dist/arrivals-' . $agencyId . '.jsonldstream';
+$departuresFilename = 'dist/departures-' . $agencyId . '.jsonldstream';
 
 // delete previous files
 if (file_exists($arrivalsFilename)) {
@@ -40,15 +41,17 @@ if (file_exists($departuresFilename)) {
     unlink($departuresFilename);
 }
 
-// Write [ to files
-// We want valid JSON, that's why we need to add [ in the beginning and ] at the end
-// Between every arrival and departure object is also a comma added
-file_put_contents($arrivalsFilename, '['.PHP_EOL, FILE_APPEND);
-file_put_contents($departuresFilename, '['.PHP_EOL, FILE_APPEND);
+// Write context to the files
+$context = createContext($agencyId);
+writeToFile($arrivalsFilename, $context);
+writeToFile($departuresFilename, $context);
 
 // This holds array of dates with corresponding serviceIds
 // We need serviceIds per day to query ordered arrivals/departures
 $date_serviceIdsArray = [];
+
+$arrivalNr = 1; // counter for arrival @id
+$departureNr = 1; // counter for departure @id
 
 // Let's generate list of dates with corresponding serviceId from calendars first
 $sql = "
@@ -190,10 +193,6 @@ if (count($calendars) > 0) {
     // We have now merged calendars and calendar_dates
     // Time for generating departures and arrivals
     generateArrivalsDepartures($date_serviceIdsArray, $entityManager);
-
-    // Add ] at end of file, so JSON is valid
-    file_put_contents($arrivalsFilename, ']'.PHP_EOL, FILE_APPEND);
-    file_put_contents($departuresFilename, ']'.PHP_EOL, FILE_APPEND);
 } else {
     // There are only calendarDates, so there can be a LOT of serviceIds
     // Check if start- and/or endDate is given as parameter
@@ -239,20 +238,6 @@ if (count($calendars) > 0) {
         $date_serviceIdsArray = []; // empty again
         $date_serviceIdsArray = addCalendarDates($date_serviceIdsArray, $calendarDates); // Keep track of previous day for the stoptimes after midnight
     }
-
-    // Remove last EOL and comma
-    $fh = fopen($arrivalsFilename, 'r+') or die("can't open file");
-    $stat = fstat($fh);
-    ftruncate($fh, $stat['size']-2);
-    fclose($fh);
-    $fh = fopen($departuresFilename, 'r+') or die("can't open file");
-    $stat = fstat($fh);
-    ftruncate($fh, $stat['size']-2);
-    fclose($fh);
-
-    // Add ] at end of file, so JSON is valid
-    file_put_contents($arrivalsFilename, PHP_EOL.']', FILE_APPEND);
-    file_put_contents($departuresFilename, PHP_EOL.']', FILE_APPEND);
 }
 
 /**
@@ -380,6 +365,7 @@ function getCalendarDatesOfSpecificDate($entityManager, $date) {
 function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
 {
     global $arrivalsFilename, $departuresFilename;
+    global $arrivalNr, $departureNr;
 
     $firstLoop = true; // First date is previous date that we need to retrieve stoptimes after midnight
 
@@ -433,17 +419,20 @@ function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
                 $arrivalData = $arrivalsAfterMidnight[$j++];
             }
 
-            writeToFile($arrivalsFilename, generateArrival($arrivalData, $date, $tripRouteIdPair));
+            writeToFile($arrivalsFilename, generateArrival($arrivalData, $date, $tripRouteIdPair, $arrivalNr));
+            $arrivalNr++;
         }
 
         while ($i < count($arrivalsArray)) {
             $arrivalData = $arrivalsArray[$i++];
-            writeToFile($arrivalsFilename, generateArrival($arrivalData, $date, $tripRouteIdPair));
+            writeToFile($arrivalsFilename, generateArrival($arrivalData, $date, $tripRouteIdPair, $arrivalNr));
+            $arrivalNr++;
         }
 
         while ($j < count($arrivalsAfterMidnight)) {
             $arrivalData = $arrivalsAfterMidnight[$j++];
-            writeToFile($arrivalsFilename, generateArrival($arrivalData, $date, $tripRouteIdPair));
+            writeToFile($arrivalsFilename, generateArrival($arrivalData, $date, $tripRouteIdPair, $arrivalNr));
+            $arrivalNr++;
         }
 
         unset($arrivalsArray); // free memory
@@ -464,19 +453,21 @@ function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
                 $departureData = $departuresAfterMidnight[$j++];
             }
 
-            writeToFile($departuresFilename, generateDeparture($departureData, $date, $tripRouteIdPair));
+            writeToFile($departuresFilename, generateDeparture($departureData, $date, $tripRouteIdPair, $departureNr));
+            $departureNr++;
         }
 
         while ($i < count($departuresArray)) {
             $departureData = $departuresArray[$i++];
-            writeToFile($departuresFilename, generateDeparture($departureData, $date, $tripRouteIdPair));
+            writeToFile($departuresFilename, generateDeparture($departureData, $date, $tripRouteIdPair, $departureNr));
+            $departureNr++;
         }
 
         while ($j < count($departuresAfterMidnight)) {
             $departureData = $arrivalsAfterMidnight[$j++];
-            writeToFile($departuresFilename, generateDeparture($departureData, $date, $tripRouteIdPair));
+            writeToFile($departuresFilename, generateDeparture($departureData, $date, $tripRouteIdPair, $departureNr));
+            $departureNr++;
         }
-
         unset($departuresArray); // free memory
 
         $prevDayTripMatches = $tripMatches;
@@ -487,17 +478,19 @@ function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
  * @param $arrivalData Stoptime that is sorted by arrivalTime.
  * @param $date Date in HH:MM:SS format.
  * @param $tripRouteIdPair Array that holds mapping between tripIDs and routeIDs.
+ * @param int $arrivalNr Number of arrival. Represents a counter.
  * @return array Arrival.
  */
-function generateArrival($arrivalData, $date, $tripRouteIdPair) {
+function generateArrival($arrivalData, $date, $tripRouteIdPair, $arrivalNr) {
     return [
         '@type' => 'Arrival',
+        '@id' => 'arrival:' . $arrivalNr,
         'date' => $date,
-        'gtfs:arrivalTime' => substr($arrivalData['arrivalTime'], 0, 5), // we only need hh:mm
-        'gtfs:stop' => $arrivalData['stopId'],
-        'gtfs:trip' => $arrivalData['tripId'],
-        'gtfs:route' => findRouteId($arrivalData['tripId'], $tripRouteIdPair),
-        'gtfs:stopSequence' => $arrivalData['stopSequence'],
+        'arrivalTime' => substr($arrivalData['arrivalTime'], 0, 5), // we only need hh:mm
+        'arrivalStop' => $arrivalData['stopId'],
+        'trip' => $arrivalData['tripId'],
+        'route' => findRouteId($arrivalData['tripId'], $tripRouteIdPair),
+        'stopSequence' => $arrivalData['stopSequence'],
         'maxStopSequence' => $arrivalData['maxStopSequence']
     ];
 }
@@ -506,17 +499,19 @@ function generateArrival($arrivalData, $date, $tripRouteIdPair) {
  * @param $departureData Stoptime that is sorted by departureTime.
  * @param $date Date in HH:MM:SS format.
  * @param $tripRouteIdPair Array that holds mapping between tripIDs and routeIDs.
+ * @param int $departureNr Number of departure. Represents a counter.
  * @return array Departure.
  */
-function generateDeparture($departureData, $date, $tripRouteIdPair) {
+function generateDeparture($departureData, $date, $tripRouteIdPair, $departureNr) {
     return [
         '@type' => 'Departure',
+        '@id' => 'departure:' . $departureNr,
         'date' => $date,
-        'gtfs:departureTime' => substr($departureData['departureTime'], 0, 5), // we only need hh:mm
-        'gtfs:stop' => $departureData['stopId'],
-        'gtfs:trip' => $departureData['tripId'],
-        'gtfs:route' => findRouteId($departureData['tripId'], $tripRouteIdPair),
-        'gtfs:stopSequence' => $departureData['stopSequence'],
+        'departureTime' => substr($departureData['departureTime'], 0, 5), // we only need hh:mm
+        'departureStop' => $departureData['stopId'],
+        'trip' => $departureData['tripId'],
+        'route' => findRouteId($departureData['tripId'], $tripRouteIdPair),
+        'stopSequence' => $departureData['stopSequence'],
         'maxStopSequence' => $departureData['maxStopSequence']
     ];
 }
@@ -638,6 +633,28 @@ function findRouteId($tripId, $tripRouteIdPairs) {
     }
 }
 
+function createContext($agencyId) {
+    return [
+        "@context"      =>
+        [
+            "gtfs"          => "http://vocab.gtfs.org/terms#",
+            "trip"          => "gtfs:trip",
+            "route"         => "gtfs:route",
+            "stopSequence"  => "gtfs:stopSequence",
+            "dct"           => "http://purl.org/dc/terms/",
+            "date"          => "dct:date",
+            "arrival"       => "http://irail.be/arrivals/" . $agencyId . "/",
+            "departure"     => "http://irail.be/departures/" . $agencyId . "/",
+            "Arrival"       => "http://semweb.mmlab.be/ns/stoptimes#Arrival",
+            "arrivalTime"   => "gtfs:arrivalTime",
+            "arrivalStop"   => "gtfs:stop",
+            "Departure"     => "http://semweb.mmlab.be/ns/stoptimes#Departure",
+            "departureTime" => "gtfs:departureTime",
+            "departureStop" => "gtfs:stop"
+        ]
+    ];
+}
+
 /**
  * Converts data to JSON and writes/appends this to specified filename.
  *
@@ -646,11 +663,9 @@ function findRouteId($tripId, $tripRouteIdPairs) {
  */
 function writeToFile($filename, $data) {
     $builder = new JsonBuilder();
+    $builder->setJsonEncodeOptions(JSON_UNESCAPED_SLASHES);
     $builder->setValues($data);
     $json = $builder->build();
-
-    // Add comma at end of object so JSON file will be valid
-    $json .= ',';
 
     file_put_contents($filename, $json.PHP_EOL, FILE_APPEND);
 }

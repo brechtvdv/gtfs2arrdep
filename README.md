@@ -1,5 +1,5 @@
 # gtfs2arrdep
-Transforms GTFS into arrival/departures in JSON format.
+Transforms GTFS into a [JSON-LD stream](https://github.com/pietercolpaert/jsonld-stream) of arrival/departures.
 
 This project is written in PHP and uses [doctrine](http://www.doctrine-project.org/) to load the GTFS files into a MySQL database.
 
@@ -41,4 +41,4 @@ The format of date parameters must be 'YYYY-MM-DD'.
 
 ### Step 4: Done
 
-You can find arrivals-[agency_id].json and departures-[agency_id].json in ```dist``` folder.
+You can find arrivals-[agency_id].jsonldstream and departures-[agency_id].jsonldstream in ```dist``` folder.
