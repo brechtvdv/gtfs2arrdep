@@ -367,6 +367,7 @@ function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
     global $arrivalsFilename, $departuresFilename;
     global $arrivalNr, $departureNr;
 
+    $prevTripRouteIdPair = [];
     $firstLoop = true; // First date is previous date that we need to retrieve stoptimes after midnight
 
     // Loop through all dates
@@ -388,11 +389,12 @@ function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
         $stmt->execute();
         $trips = $stmt->fetchAll();
 
-        $tripRouteIdPair = [];
+        $tripRouteIdPair = $prevTripRouteIdPair;
         $tripMatches = [];
         for ($j = 0; $j < count($trips); $j++) {
             $tripMatches[] = "'" . $trips[$j]['tripId'] . "'";
             $tripRouteIdPair[] = [$trips[$j]['tripId'], $trips[$j]['routeId']];
+            $prevTripRouteIdPair[] = [$trips[$j]['tripId'], $trips[$j]['routeId']];
         }
 
         $tripMatches = join(' , ', $tripMatches);
