@@ -30,6 +30,9 @@ $stmt = $entityManager->getConnection()->prepare($sql);
 $stmt->execute();
 $agencyArray = $stmt->fetchAll();
 $agencyId = $agencyArray[0]['agencyId'];
+
+// Change '/' to '-' in  name, otherwise problem with filename
+$agencyId = preg_replace('/\//', '-', $agencyId);
 $arrivalsFilename = 'dist/arrivals-' . $agencyId . '.jsonldstream';
 $departuresFilename = 'dist/departures-' . $agencyId . '.jsonldstream';
 
@@ -99,7 +102,7 @@ if (count($calendars) > 0) {
         // When start- and endDate of calendar fall in given interval
         if ($startDate >= $startDate_ && $endDate <= $endDate_) {
             // Arrdeps that happen after midnight of the previous day need to be added too
-            $prevDate = strtotime('-1 day', $startDate);
+            $prevDate = strtotime('-1 day', strtotime($startDate));
             $calendarDates = getCalendarDatesOfSpecificDate($entityManager, $prevDate);
             $date_serviceIdsArray = addCalendarDates($date_serviceIdsArray, $calendarDates);
 
@@ -118,7 +121,7 @@ if (count($calendars) > 0) {
             }
         } else if ($startDate < $startDate_ && $endDate <= $endDate_) {
             // Arrdeps that happen after midnight of the previous day need to be added too
-            $prevDate = strtotime('-1 day', $startDate_);
+            $prevDate = strtotime('-1 day', strtotime($startDate_));
             $calendarDates = getCalendarDatesOfSpecificDate($entityManager, $prevDate);
             $date_serviceIdsArray = addCalendarDates($date_serviceIdsArray, $calendarDates);
 
@@ -137,7 +140,7 @@ if (count($calendars) > 0) {
             }
         } else if ($startDate >= $startDate_ && $endDate > $endDate_) {
             // Arrdeps that happen after midnight of the previous day need to be added too
-            $prevDate = strtotime('-1 day', $startDate);
+            $prevDate = strtotime('-1 day', strtotime($startDate));
             $calendarDates = getCalendarDatesOfSpecificDate($entityManager, $prevDate);
             $date_serviceIdsArray = addCalendarDates($date_serviceIdsArray, $calendarDates);
 
@@ -156,7 +159,7 @@ if (count($calendars) > 0) {
             }
         } else if ($startDate < $startDate_ && $endDate > $endDate_) {
             // Arrdeps that happen after midnight of the previous day need to be added too
-            $prevDate = strtotime('-1 day', $startDate_);
+            $prevDate = strtotime('-1 day', strtotime($startDate_));
             $calendarDates = getCalendarDatesOfSpecificDate($entityManager, $prevDate);
             $date_serviceIdsArray = addCalendarDates($date_serviceIdsArray, $calendarDates);
 
