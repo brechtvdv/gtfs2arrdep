@@ -39,6 +39,8 @@ php scripts/create_arrivals_and_departures.php [startDate] [endDate]
 
 The format of date parameters must be 'YYYY-MM-DD'.
 
+Note: optional parameters ```startDate``` and ```endDate``` only work when there are no calendars.
+
 ### Step 4: Done
 
 You can find arrivals-[agency_id].jsonldstream and departures-[agency_id].jsonldstream in ```dist``` folder.
