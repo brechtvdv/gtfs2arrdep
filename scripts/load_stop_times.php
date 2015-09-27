@@ -32,17 +32,22 @@ if (($handleRead = fopen($file_stop_times, 'r')) !== false) {
         // First line
         if ($currentTripId === null) {
             $currentTripId = $stopTime->getTripId();
+            $stopTime->setMaxStopSequence($stopTime->getStopSequence());
         }
 
         // Update maxStopSequence when still the same trip
         if ($stopTime->getTripId() === $currentTripId) {
-            $maxStopSequence = $stopTime->getStopSequence();
+            if ($stopTime->getStopSequence() > $maxStopSequence) {
+                $maxStopSequence = $stopTime->getStopSequence();
+            }
         } else {
             // New trip started so update previous one
+            $stopTimesOfSameTrip = sortStopTimes($stopTimesOfSameTrip, $maxStopSequence);
             updateMaxStopSequenceAndAfterMidnightOfStopTimes($stopTimesOfSameTrip, $maxStopSequence);
             persistAndFlushStopTimes($entityManager, $stopTimesOfSameTrip);
             $stopTimesOfSameTrip = []; // new trip -> new stoptimes sequence
             $currentTripId = $stopTime->getTripId();
+            $maxStopSequence = 1;
         }
 
         $stopTimesOfSameTrip[] = $stopTime;
@@ -54,6 +59,7 @@ if (($handleRead = fopen($file_stop_times, 'r')) !== false) {
 
     fclose($handleRead);
 
+    $stopTimesOfSameTrip = sortStopTimes($stopTimesOfSameTrip, $maxStopSequence);
     updateMaxStopSequenceAndAfterMidnightOfStopTimes($stopTimesOfSameTrip, $maxStopSequence);
     persistAndFlushStopTimes($entityManager, $stopTimesOfSameTrip);
 
@@ -97,6 +103,33 @@ function updateMaxStopSequenceAndAfterMidnightOfStopTimes($stopTimes, $maxStopSe
 
         $prevStopTime = $stopTime;
     }
+}
+
+/**
+ * Sorts array of stoptimes by stopSequence.
+ *
+ * @param array $stopTimes Array of stoptimes.
+ * @param int $maxStopSequence Maximum stop sequence.
+ * @return array $sortedStopTimes Array of stoptimes that are ordered by stopSequence.
+ */
+function sortStopTimes($stopTimes, $maxStopSequence) {
+    $sortedStopTimes = [];
+
+    for ($stopSequence = 1; $stopSequence <= $maxStopSequence; $stopSequence++) {
+        // Loop through stoptimes to find stoptime with given stopSequence
+        // Supposes are no holes in stopsequences
+        for ($i = 0; $i < count($stopTimes); $i++) {
+            if ($stopTimes[$i]->getStopSequence() == $stopSequence) {
+                $sortedStopTimes[] = $stopTimes[$i];
+            }
+
+            if ($stopTimes[$i]->getStopSequence() == null) {
+                var_dump($stopTimes[$i]);
+            }
+        }
+    }
+
+    return $sortedStopTimes;
 }
 
 /**
