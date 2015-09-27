@@ -408,74 +408,86 @@ function generateArrivalsDepartures($date_serviceIdsArray, $entityManager)
             continue;
         }
 
-        // ARRIVALS
-        $arrivalsArray = queryArrivals($entityManager, $tripMatches);
+        // Smaller timespans for big datasets
+        $hourEvery = 1; // Query every x hour
+        $minEvery = 1; // Query every x minutes
+        for ($startHour=0; $startHour<24; $startHour+=$hourEvery) {
+            $endH = $startHour + $hourEvery; // Loop all hours between start and end
+            for($endHour=$startHour; $endHour<$endH; $endHour++) {
+                for ($startMin = 0; $startMin <= 60; $startMin += $minEvery) {
+                    $endMin = $startMin + $minEvery;
 
-        // Search arrivals that happen after midnight of previous day
-        $arrivalsAfterMidnight = queryArrivalsAfterMidnight($entityManager, $prevDayTripMatches);
+                    // ARRIVALS
+                    $arrivalsArray = queryArrivals($entityManager, $tripMatches, $startHour, $startMin, $endHour, $endMin);
 
-        // Merge sort
-        $i = 0;
-        $j = 0;
-        while ($i < count($arrivalsArray) && $j < count($arrivalsAfterMidnight)) {
-            if ($arrivalsArray[$i]['arrivalTime'] < $arrivalsAfterMidnight[$j]['arrivalTime']) {
-                $arrivalData = $arrivalsArray[$i++];
-            } else {
-                $arrivalData = $arrivalsAfterMidnight[$j++];
+                    // Search arrivals that happen after midnight of previous day
+                    $arrivalsAfterMidnight = queryArrivalsAfterMidnight($entityManager, $prevDayTripMatches, $startHour, $startMin, $endHour, $endMin);
+
+                    // Merge sort
+                    $i = 0;
+                    $j = 0;
+                    while ($i < count($arrivalsArray) && $j < count($arrivalsAfterMidnight)) {
+                        if ($arrivalsArray[$i]['arrivalTime'] < $arrivalsAfterMidnight[$j]['arrivalTime']) {
+                            $arrivalData = $arrivalsArray[$i++];
+                        } else {
+                            $arrivalData = $arrivalsAfterMidnight[$j++];
+                        }
+
+                        writeToFile($arrivalsFilename, generateArrival($arrivalData, $date, $tripRouteIdPair, $arrivalNr));
+                        $arrivalNr++;
+                    }
+
+                    while ($i < count($arrivalsArray)) {
+                        $arrivalData = $arrivalsArray[$i++];
+                        writeToFile($arrivalsFilename, generateArrival($arrivalData, $date, $tripRouteIdPair, $arrivalNr));
+                        $arrivalNr++;
+                    }
+
+                    while ($j < count($arrivalsAfterMidnight)) {
+                        $arrivalData = $arrivalsAfterMidnight[$j++];
+                        writeToFile($arrivalsFilename, generateArrival($arrivalData, $date, $tripRouteIdPair, $arrivalNr));
+                        $arrivalNr++;
+                    }
+
+                    unset($arrivalsArray); // free memory
+
+                    // DEPARTURES
+                    $departuresArray = queryDepartures($entityManager, $tripMatches, $startHour, $startMin, $endHour, $endMin);
+
+                    // Search departures that happen after midnight of previous day
+                    $departuresAfterMidnight = queryDeparturesAfterMidnight($entityManager, $prevDayTripMatches, $startHour, $startMin, $endHour, $endMin);
+
+                    // Merge sort
+                    $i = 0;
+                    $j = 0;
+                    while ($i < count($departuresArray) && $j < count($departuresAfterMidnight)) {
+                        if ($departuresArray[$i]['departureTime'] < $departuresAfterMidnight[$j]['departureTime']) {
+                            $departureData = $departuresArray[$i++];
+                        } else {
+                            $departureData = $departuresAfterMidnight[$j++];
+                        }
+
+                        writeToFile($departuresFilename, generateDeparture($departureData, $date, $tripRouteIdPair, $departureNr));
+                        $departureNr++;
+                    }
+
+                    while ($i < count($departuresArray)) {
+                        $departureData = $departuresArray[$i++];
+                        writeToFile($departuresFilename, generateDeparture($departureData, $date, $tripRouteIdPair, $departureNr));
+                        $departureNr++;
+                    }
+
+                    while ($j < count($departuresAfterMidnight)) {
+                        $departureData = $arrivalsAfterMidnight[$j++];
+                        writeToFile($departuresFilename, generateDeparture($departureData, $date, $tripRouteIdPair, $departureNr));
+                        $departureNr++;
+                    }
+                    unset($departuresArray); // free memory
+
+                    $prevDayTripMatches = $tripMatches;
+                }
             }
-
-            writeToFile($arrivalsFilename, generateArrival($arrivalData, $date, $tripRouteIdPair, $arrivalNr));
-            $arrivalNr++;
         }
-
-        while ($i < count($arrivalsArray)) {
-            $arrivalData = $arrivalsArray[$i++];
-            writeToFile($arrivalsFilename, generateArrival($arrivalData, $date, $tripRouteIdPair, $arrivalNr));
-            $arrivalNr++;
-        }
-
-        while ($j < count($arrivalsAfterMidnight)) {
-            $arrivalData = $arrivalsAfterMidnight[$j++];
-            writeToFile($arrivalsFilename, generateArrival($arrivalData, $date, $tripRouteIdPair, $arrivalNr));
-            $arrivalNr++;
-        }
-
-        unset($arrivalsArray); // free memory
-
-        // DEPARTURES
-        $departuresArray = queryDepartures($entityManager, $tripMatches);
-
-        // Search departures that happen after midnight of previous day
-        $departuresAfterMidnight = queryDeparturesAfterMidnight($entityManager, $prevDayTripMatches);
-
-        // Merge sort
-        $i = 0;
-        $j = 0;
-        while ($i < count($departuresArray) && $j < count($departuresAfterMidnight)) {
-            if ($departuresArray[$i]['departureTime'] < $departuresAfterMidnight[$j]['departureTime']) {
-                $departureData = $departuresArray[$i++];
-            } else {
-                $departureData = $departuresAfterMidnight[$j++];
-            }
-
-            writeToFile($departuresFilename, generateDeparture($departureData, $date, $tripRouteIdPair, $departureNr));
-            $departureNr++;
-        }
-
-        while ($i < count($departuresArray)) {
-            $departureData = $departuresArray[$i++];
-            writeToFile($departuresFilename, generateDeparture($departureData, $date, $tripRouteIdPair, $departureNr));
-            $departureNr++;
-        }
-
-        while ($j < count($departuresAfterMidnight)) {
-            $departureData = $arrivalsAfterMidnight[$j++];
-            writeToFile($departuresFilename, generateDeparture($departureData, $date, $tripRouteIdPair, $departureNr));
-            $departureNr++;
-        }
-        unset($departuresArray); // free memory
-
-        $prevDayTripMatches = $tripMatches;
     }
 }
 
@@ -527,9 +539,13 @@ function generateDeparture($departureData, $date, $tripRouteIdPair, $departureNr
  *
  * @param mixed $entityManager Entity manager of Doctrine.
  * @param string $trips String of concatenated tripIds (of one day).
+ * @param string $startHour Hour that arrivalTimes may start.
+ * @param string $startMin Minutes that arrivalTimes may start.
+ * @param string $endHour Hour that arrivalTimes end.
+ * @param string $endMin Minutes that arrivalTimes may end.
  * @return array Stoptimes that are ordered ascending by their arrival time.
  */
-function queryArrivals($entityManager, $trips) {
+function queryArrivals($entityManager, $trips, $startHour, $startMin, $endHour, $endMin) {
     $sql = "
             SELECT *
               FROM stoptimes
@@ -537,7 +553,9 @@ function queryArrivals($entityManager, $trips) {
                 --  ON trips.tripId = stoptimes.tripId
                 -- JOIN stops
                 --  ON stops.stopId = stoptimes.stopId
-              WHERE stoptimes.tripId IN ( $trips )
+              WHERE stoptimes.arrivalTime >= TIME(STR_TO_DATE(CONCAT($startHour, ':', $startMin), '%k:%i'))
+                AND stoptimes.arrivalTime < TIME(STR_TO_DATE(CONCAT($endHour, ':', $endMin), '%k:%i'))
+                AND stoptimes.tripId IN ( $trips )
                 AND NOT stoptimes.arrivalAfterMidnight
               ORDER BY stoptimes.arrivalTime ASC
         ";
@@ -553,9 +571,13 @@ function queryArrivals($entityManager, $trips) {
  *
  * @param mixed $entityManager Entity manager of Doctrine.
  * @param string $trips String of concatenated tripIds (of one day).
+ * @param string $startHour Hour that departureTimes may start.
+ * @param string $startMin Minutes that departureTimes may start.
+ * @param string $endHour Hour that departureTimes end.
+ * @param string $endMin Minutes that departureTimes may end.
  * @return array Stoptimes that are ordered ascending by their departure time.
  */
-function queryDepartures($entityManager, $trips) {
+function queryDepartures($entityManager, $trips, $startHour, $startMin, $endHour, $endMin) {
     $sql = "
             SELECT *
               FROM stoptimes
@@ -563,7 +585,9 @@ function queryDepartures($entityManager, $trips) {
                 --  ON trips.tripId = stoptimes.tripId
                 -- JOIN stops
                 --  ON stops.stopId = stoptimes.stopId
-              WHERE stoptimes.tripId IN ( $trips )
+              WHERE stoptimes.departureTime >= TIME(STR_TO_DATE(CONCAT($startHour, ':', $startMin), '%k:%i'))
+                AND stoptimes.departureTime < TIME(STR_TO_DATE(CONCAT($endHour, ':', $endMin), '%k:%i'))
+                AND stoptimes.tripId IN ( $trips )
                 AND NOT stoptimes.departureAfterMidnight
               ORDER BY stoptimes.departureTime ASC
         ";
@@ -578,9 +602,13 @@ function queryDepartures($entityManager, $trips) {
  *
  * @param $entityManager Doctrine entity manager.
  * @param $prevDayTripMatches Trips of previous day.
+ * @param string $startHour Hour that arrivalTimes may start.
+ * @param string $startMin Minutes that arrivalTimes may start.
+ * @param string $endHour Hour that arrivalTimes end.
+ * @param string $endMin Minutes that arrivalTimes may end.
  * @return mixed Arrivals after midnight.
  */
-function queryArrivalsAfterMidnight($entityManager, $prevDayTripMatches) {
+function queryArrivalsAfterMidnight($entityManager, $prevDayTripMatches, $startHour, $startMin, $endHour, $endMin) {
     $sql = "
             SELECT *
               FROM stoptimes
@@ -588,7 +616,9 @@ function queryArrivalsAfterMidnight($entityManager, $prevDayTripMatches) {
                 --  ON trips.tripId = stoptimes.tripId
                 -- JOIN stops
                 --  ON stops.stopId = stoptimes.stopId
-              WHERE stoptimes.tripId IN ( $prevDayTripMatches )
+              WHERE stoptimes.arrivalTime >= TIME(STR_TO_DATE(CONCAT($startHour, ':', $startMin), '%k:%i'))
+                AND stoptimes.arrivalTime < TIME(STR_TO_DATE(CONCAT($endHour, ':', $endMin), '%k:%i'))
+                AND stoptimes.tripId IN ( $prevDayTripMatches )
                 AND stoptimes.arrivalAfterMidnight
               ORDER BY stoptimes.arrivalTime ASC
         ";
@@ -603,9 +633,13 @@ function queryArrivalsAfterMidnight($entityManager, $prevDayTripMatches) {
  *
  * @param $entityManager Doctrine entity manager.
  * @param $prevDayTripMatches Trips of previous day.
+ * @param string $startHour Hour that departureTimes may start.
+ * @param string $startMin Minutes that departureTimes may start.
+ * @param string $endHour Hour that departureTimes end.
+ * @param string $endMin Minutes that departureTimes may end.
  * @return mixed Departures after midnight.
  */
-function queryDeparturesAfterMidnight($entityManager, $prevDayTripMatches) {
+function queryDeparturesAfterMidnight($entityManager, $prevDayTripMatches, $startHour, $startMin, $endHour, $endMin) {
     $sql = "
             SELECT *
               FROM stoptimes
@@ -613,7 +647,9 @@ function queryDeparturesAfterMidnight($entityManager, $prevDayTripMatches) {
                 --  ON trips.tripId = stoptimes.tripId
                 -- JOIN stops
                 --  ON stops.stopId = stoptimes.stopId
-              WHERE stoptimes.tripId IN ( $prevDayTripMatches )
+              WHERE stoptimes.departureTime >= TIME(STR_TO_DATE(CONCAT($startHour, ':', $startMin), '%k:%i'))
+                AND stoptimes.departureTime < TIME(STR_TO_DATE(CONCAT($endHour, ':', $endMin), '%k:%i'))
+                AND stoptimes.tripId IN ( $prevDayTripMatches )
                 AND stoptimes.departureAfterMidnight
               ORDER BY stoptimes.departureTime ASC
         ";
